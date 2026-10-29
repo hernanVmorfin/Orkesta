@@ -3,8 +3,8 @@ import { Navigation } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { ElementShape } from './ElementShape'
 import { LAYERS, CATALOG, isTableKind } from '../lib/catalog'
-import { clearanceIssues, dist, snap } from '../lib/geometry'
-import { canvasRef } from '../lib/canvas'
+import { clearanceIssues, dist, distToRect, snap } from '../lib/geometry'
+import { canvasRef, type FocusRequest } from '../lib/canvas'
 import { SATELLITE_ATTRIBUTION, planToLatLng, tileZoom, tilesFor } from '../lib/geo'
 import type { GeoAnchor, Pt } from '../types'
 
@@ -18,11 +18,17 @@ type Drag =
 
 const LAYER_ORDER = Object.fromEntries(LAYERS.map((l, i) => [l.id, i]))
 
-export function FloorCanvas() {
+/** `review` (phones): drag pans, pinch zooms, tap selects; nothing on the plan can be edited. */
+export function FloorCanvas({ review = false }: { review?: boolean }) {
   const s = usePlanStore()
   const { plan, zoom, pan, selection, viewOnly } = s
+  const readOnly = viewOnly || review
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<Drag | null>(null)
+  // Touch: every finger on the canvas, the pinch in progress, and a press that may still turn out to be a tap
+  const pointers = useRef(new Map<number, Pt>())
+  const pinch = useRef<{ d0: number; z0: number; world: Pt } | null>(null)
+  const tap = useRef<{ x: number; y: number; id: string | null } | null>(null)
   const [cursor, setCursor] = useState<Pt | null>(null)
   const [marquee, setMarquee] = useState<{ a: Pt; b: Pt } | null>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -83,6 +89,20 @@ export function FloorCanvas() {
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  // Centers a point (search results); it lands in the upper part of the view so a bottom sheet doesn't cover it
+  useEffect(() => {
+    const onFocus = (ev: Event) => {
+      const el = svgRef.current
+      if (!el) return
+      const { x, y, zoom: z } = (ev as CustomEvent<FocusRequest>).detail
+      const { width, height } = el.getBoundingClientRect()
+      const nz = Math.min(200, Math.max(usePlanStore.getState().zoom, z ?? 0))
+      usePlanStore.setState({ zoom: nz, pan: { x: width / 2 - x * nz, y: height * 0.35 - y * nz } })
+    }
+    window.addEventListener('fp:focus', onFocus)
+    return () => window.removeEventListener('fp:focus', onFocus)
+  }, [])
+
   const visible = useMemo(
     () => plan.elements
       .filter((e) => plan.layers[e.layer]?.visible !== false)
@@ -105,21 +125,57 @@ export function FloorCanvas() {
     return !e || e.locked || plan.layers[e.layer]?.locked
   }
 
+  /** Element under the pointer, or the nearest one within a fingertip (~24 px) of it. */
+  const hitAt = (target: Element, w: Pt) => {
+    const direct = target.closest('[data-id]')?.getAttribute('data-id')
+    if (direct) return direct
+    let best: string | null = null
+    let bestD = 24 / zoom
+    for (const e of visible) {
+      const d = distToRect(w, e)
+      if (d < bestD) { bestD = d; best = e.id }
+    }
+    return best
+  }
+
+  const pinchCenter = () => {
+    const [a, b] = [...pointers.current.values()]
+    const r = svgRef.current!.getBoundingClientRect()
+    return { mid: { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top }, d: Math.hypot(a.x - b.x, a.y - b.y) }
+  }
+
   const onPointerDown = (ev: React.PointerEvent) => {
     const target = ev.target as Element
     const w = toWorld(ev.clientX, ev.clientY)
-    svgRef.current!.setPointerCapture(ev.pointerId)
+    try { svgRef.current!.setPointerCapture(ev.pointerId) } catch { /* pointer already released */ }
+    pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
 
+    // A second finger turns whatever the first one started into a pinch-zoom
+    if (pointers.current.size === 2) {
+      const { mid, d } = pinchCenter()
+      pinch.current = { d0: d || 1, z0: zoom, world: { x: (mid.x - pan.x) / zoom, y: (mid.y - pan.y) / zoom } }
+      drag.current = null
+      tap.current = null
+      setMarquee(null)
+      return
+    }
+    if (pointers.current.size > 2) return
+
+    if (review) {
+      tap.current = { x: ev.clientX, y: ev.clientY, id: hitAt(target, w) }
+      drag.current = { t: 'pan', sx: ev.clientX, sy: ev.clientY, pan }
+      return
+    }
     if (ev.button === 1 || ev.altKey) {
       drag.current = { t: 'pan', sx: ev.clientX, sy: ev.clientY, pan }
       return
     }
-    if (s.placing && !viewOnly) {
+    if (s.placing && !readOnly) {
       s.addElement(s.placing, s.snapOn ? { x: snap(w.x), y: snap(w.y) } : w)
       if (!ev.shiftKey) s.set({ placing: null })
       return
     }
-    if (s.tool === 'geo' && geo && !viewOnly) {
+    if (s.tool === 'geo' && geo && !readOnly) {
       drag.current = { t: 'geo', start: w, geo0: geo, moved: false }
       return
     }
@@ -134,16 +190,16 @@ export function FloorCanvas() {
       return
     }
     const hit = target.closest('[data-id]')?.getAttribute('data-id')
-    if (hit && (viewOnly || !isLocked(hit))) {
+    if (hit && (readOnly || !isLocked(hit))) {
       const additive = ev.shiftKey || ev.metaKey || ev.ctrlKey
       if (!selection.includes(hit) || additive) s.select([hit], additive)
-      if (viewOnly) return
+      if (readOnly) return
       const ids = additive ? selection.concat(hit) : selection.includes(hit) ? selection : [hit]
       const orig = new Map(plan.elements.filter((e) => ids.includes(e.id) && !isLocked(e.id)).map((e) => [e.id, { x: e.x, y: e.y }]))
       drag.current = { t: 'move', start: w, orig, primary: hit, moved: false }
       return
     }
-    if (ev.shiftKey && !viewOnly) {
+    if (ev.shiftKey && !readOnly) {
       drag.current = { t: 'marquee', a: w, additive: true }
       setMarquee({ a: w, b: w })
       return
@@ -153,6 +209,17 @@ export function FloorCanvas() {
   }
 
   const onPointerMove = (ev: React.PointerEvent) => {
+    if (pointers.current.has(ev.pointerId)) pointers.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY })
+    const pz = pinch.current
+    if (pz && pointers.current.size >= 2) {
+      // Zoom by the change in finger spread, keeping the point between the fingers in place
+      const { mid, d } = pinchCenter()
+      const nz = Math.min(200, Math.max(3, (pz.z0 * d) / pz.d0))
+      s.set({ zoom: nz, pan: { x: mid.x - pz.world.x * nz, y: mid.y - pz.world.y * nz } })
+      return
+    }
+    const t = tap.current
+    if (t && Math.hypot(ev.clientX - t.x, ev.clientY - t.y) > 6) tap.current = null
     const w = toWorld(ev.clientX, ev.clientY)
     setCursor(w)
     const d = drag.current
@@ -183,7 +250,23 @@ export function FloorCanvas() {
     }
   }
 
-  const onPointerUp = () => {
+  const onPointerUp = (ev: React.PointerEvent) => {
+    pointers.current.delete(ev.pointerId)
+    if (pinch.current) {
+      if (pointers.current.size < 2) {
+        pinch.current = null
+        // The finger still down carries on panning from where it is now
+        const rest = [...pointers.current.values()][0]
+        drag.current = rest ? { t: 'pan', sx: rest.x, sy: rest.y, pan: usePlanStore.getState().pan } : null
+      }
+      return
+    }
+    const t = tap.current
+    tap.current = null
+    if (t && review) {
+      const e = t.id ? plan.elements.find((x) => x.id === t.id) : undefined
+      s.set({ selection: e ? [e.id] : [], highlightTable: e && isTableKind(e.kind) ? e.id : null })
+    }
     const d = drag.current
     if (d?.t === 'marquee' && marquee) {
       const x0 = Math.min(marquee.a.x, marquee.b.x), x1 = Math.max(marquee.a.x, marquee.b.x)
@@ -195,9 +278,17 @@ export function FloorCanvas() {
     drag.current = null
   }
 
+  const onPointerCancel = (ev: React.PointerEvent) => {
+    pointers.current.delete(ev.pointerId)
+    if (pointers.current.size < 2) pinch.current = null
+    tap.current = null
+    drag.current = null
+    setMarquee(null)
+  }
+
   const onDrop = (ev: React.DragEvent) => {
     ev.preventDefault()
-    if (viewOnly) return
+    if (readOnly) return
     const w = toWorld(ev.clientX, ev.clientY)
     const kind = ev.dataTransfer.getData('application/x-kind')
     if (kind) {
@@ -212,7 +303,7 @@ export function FloorCanvas() {
   }
 
   const selected = plan.elements.filter((e) => selection.includes(e.id))
-  const single = selected.length === 1 && !viewOnly && !isLocked(selected[0].id) ? selected[0] : null
+  const single = selected.length === 1 && !readOnly && !isLocked(selected[0].id) ? selected[0] : null
   const bm = plan.basemap
   const m = s.measure
 
@@ -225,6 +316,7 @@ export function FloorCanvas() {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
         onPointerLeave={() => setCursor(null)}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
@@ -305,31 +397,33 @@ export function FloorCanvas() {
       </svg>
 
       <ScaleBar zoom={zoom} />
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-white/90 px-2 py-1 font-mono text-[11px] text-muted shadow-sm">
-        {cursor ? `x ${cursor.x.toFixed(2)} m · y ${cursor.y.toFixed(2)} m` : 'Scroll to zoom · drag to pan · Shift+drag to box-select'}
-      </div>
-      {s.placing && (
+      {!review && (
+        <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-white/90 px-2 py-1 font-mono text-[11px] text-muted shadow-sm">
+          {cursor ? `x ${cursor.x.toFixed(2)} m · y ${cursor.y.toFixed(2)} m` : 'Scroll to zoom · drag to pan · Shift+drag to box-select'}
+        </div>
+      )}
+      {s.placing && !review && (
         <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
           Click to place <b>{CATALOG[s.placing]?.name}</b> · Shift+click to place several · Esc to cancel
         </div>
       )}
-      {s.tool === 'geo' && (
+      {s.tool === 'geo' && !review && (
         <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
           Drag to move the satellite under your venue · rotate it in the Venue tab · Esc when done
         </div>
       )}
       {satellite && (
         <>
-          <div className="pointer-events-none absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/90 shadow-sm" title="North">
+          <div className={`pointer-events-none absolute right-3 grid h-10 w-10 place-items-center rounded-full bg-white/90 shadow-sm ${review ? 'top-16' : 'top-3'}`} title="North">
             <div className="flex flex-col items-center" style={{ transform: `rotate(${satellite.rotation}deg)` }}>
               <Navigation size={14} className="fill-red-600 text-red-600" />
               <span className="font-mono text-[9px] font-semibold leading-none text-ink">N</span>
             </div>
           </div>
-          <div className="pointer-events-none absolute bottom-10 right-3 rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-muted">{SATELLITE_ATTRIBUTION}</div>
+          <div className={`pointer-events-none absolute right-3 rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-muted ${review ? 'bottom-3' : 'bottom-10'}`}>{SATELLITE_ATTRIBUTION}</div>
         </>
       )}
-      {issues.length > 0 && (
+      {issues.length > 0 && !review && (
         <div className="absolute left-3 top-3 rounded-md border border-red-200 bg-white/95 px-3 py-1.5 text-xs text-red-700 shadow-sm">
           {issues.length} aisle {issues.length === 1 ? 'conflict' : 'conflicts'} under {plan.minAisleM} m
         </div>

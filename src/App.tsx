@@ -3,12 +3,15 @@ import { TopBar } from './components/TopBar'
 import { Library } from './components/Library'
 import { FloorCanvas } from './components/FloorCanvas'
 import { RightPanel } from './components/RightPanel'
+import { MobileApp } from './components/mobile/MobileApp'
 import { usePlanStore } from './store/usePlanStore'
 import { requestFit } from './lib/canvas'
+import { MOBILE_QUERY, useIsMobile } from './lib/useMediaQuery'
 
 export default function App() {
   const viewOnly = usePlanStore((s) => s.viewOnly)
   const hydrated = usePlanStore((s) => s.hydrated)
+  const isMobile = useIsMobile()
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => { void usePlanStore.getState().hydrate() }, [])
@@ -33,7 +36,8 @@ export default function App() {
       const mod = e.metaKey || e.ctrlKey
       if (e.key === 'Escape') s.set({ placing: null, selection: [], measure: null, tool: 'select' })
       if (!mod && e.key === 'f') requestFit()
-      if (s.viewOnly) return
+      // Phones are read-only, even with a hardware keyboard attached
+      if (s.viewOnly || window.matchMedia(MOBILE_QUERY).matches) return
       if (mod) {
         const k = e.key.toLowerCase()
         if (k === 'z') { e.preventDefault(); if (e.shiftKey) s.redo(); else s.undo() }
@@ -60,14 +64,22 @@ export default function App() {
   if (!hydrated) return <div className="grid h-full place-items-center text-sm text-muted">Loading your events…</div>
 
   return (
-    <div className="flex h-full flex-col">
-      <TopBar />
-      <div className="flex min-h-0 flex-1">
-        {!viewOnly && <Library />}
-        <main className="min-w-0 flex-1"><FloorCanvas /></main>
-        <RightPanel />
-      </div>
-      {toast && <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-sm text-on-ink shadow-lg">{toast}</div>}
-    </div>
+    <>
+      {isMobile ? <MobileApp /> : (
+        <div className="flex h-full flex-col">
+          <TopBar />
+          <div className="flex min-h-0 flex-1">
+            {!viewOnly && <Library />}
+            <main className="min-w-0 flex-1"><FloorCanvas /></main>
+            <RightPanel />
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div className={`fixed left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-center text-sm text-on-ink shadow-lg ${isMobile ? 'bottom-24' : 'bottom-6'}`}>
+          {toast}
+        </div>
+      )}
+    </>
   )
 }

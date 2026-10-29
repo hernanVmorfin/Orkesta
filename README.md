@@ -19,6 +19,7 @@ npm run build    # production build in dist/
 - Aisle clearance checks (default 1.2 m, editable in Venue).
 - Exports: A3 PDF with iNBest title block, PNG, seating CSV, project JSON.
 - Share links (view-only or editable copy) encoded in the URL. View-only links leave out the guest list unless you choose to show names; emails and dietary notes are never included. Opening an editable copy adds it as a new event.
+- Phones (under 768 px wide) get a read-only mobile companion with bottom tabs. The Map tab shows the plan (and satellite) with pinch-to-zoom, drag to pan, tap a table to see who sits there, and a guest/table search that centers the map on the result. Tables, Guests and Details tabs are next (see ROADMAP.md section 10). Pinch-to-zoom also works in the desktop editor on touch screens.
 - Multiple events saved in the browser (IndexedDB, including uploaded basemaps): switch, create, duplicate and delete from the menu next to the event name. The top bar shows "Not saved" if the browser blocks storage.
 
 Confirm safety marker positions (extinguishers, exits, first aid) with the venue and local civil protection.
@@ -36,6 +37,8 @@ src/
   lib/canvas.ts             live SVG ref, fit request
   lib/geo.ts                satellite tiles, geo anchor math, place search
   lib/seating.ts            auto-seat algorithm
+  lib/useMediaQuery.ts      phone breakpoint (MOBILE_QUERY)
+  components/mobile/        MobileApp (shell, tabs), MobileMap (map, search, details sheet)
   store/usePlanStore.ts     Zustand store, undo/redo, events, autosave
   components/               TopBar, EventsMenu, Library, FloorCanvas, ElementShape, RightPanel,
                             Inspector, TablesPanel, LayersPanel, VenuePanel, SatelliteSection, ShareDialog

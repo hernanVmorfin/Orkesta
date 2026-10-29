@@ -233,3 +233,25 @@ After that: levels, then library packs, then the backend.
 ### Positioning
 
 OnePlan is outdoor site planning with paywalls: Free allows 25 objects; Pro is $66/month for 10 events; Team is $60 per user per month (3-seat minimum). Orkesta can be **the indoor venue planner that also handles seating and life safety**, with calculators tied to the plan. Every point in section 9 strengthens that position. None of it means chasing OnePlan's map.
+
+---
+
+## 10. Mobile companion (phones)
+
+**Audit (2026-10-29), before this work:**
+- **Phones (375 px):** the plan canvas was 0 px wide, because the library (256 px) and right panel (360 px) filled the screen. The page scrolled sideways to about 919 px, and Share and Export were cut off.
+- **View-only links on a phone:** the plan was a 15 px sliver.
+- **Tablets (768 px):** the plan got 152 px.
+- **Touch:** zoom was mouse-wheel only. Library and guest drag-and-drop used mouse drag events, which don't work on touch. Delete buttons only appeared on hover.
+- **Sizing:** 11 controls were 28 px tall, and only one responsive class was used in the whole app.
+
+**Approach:** the phone is a review and on-site companion, not an editor. Below 768 px, a separate layout reuses the same store, and the desktop editor stays as it is. View-only links opened on a phone get this layout automatically. The only planned edit on a phone is guest check-in.
+
+| Phase | Scope | Status |
+|---|---|---|
+| M1 | Mobile shell with bottom tabs (Map, Tables, Guests, Details). Map: read-only plan and satellite, pinch-to-zoom (also on desktop touch screens), drag to pan, tap a table or object for a details sheet, guest/table search that centers the map, zoom/fit/satellite buttons (44 px). | **Done** on `feature/mobile-companion` |
+| M2 | Tables tab (fill bars, tag filter) and Guests tab (search, filters, check-in toggle), with "show on map" from either | Next |
+| M3 | Details tab (event summary, aisle-check status, PDF download, share link), event switcher on your own phone | |
+| M4 | Tablets: collapsible library and panels, a share dialog that fits, visible delete actions, tap-to-seat instead of drag-and-drop, 44 px targets in the editor | |
+
+**Still to test on real devices:** iOS Safari and Android Chrome. Pinch and the safe areas were only checked in an emulated 375 × 812 viewport, with synthetic touch events. This needs the app hosted over HTTPS.
