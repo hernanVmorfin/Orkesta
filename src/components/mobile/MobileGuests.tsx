@@ -8,7 +8,7 @@ type Filter = 'all' | 'unseated' | 'in' | 'out'
 /** Phone Guests tab: search, filter and check guests in at the door. */
 export function MobileGuests({ onShowOnMap }: { onShowOnMap: (tableId: string, guestId: string) => void }) {
   const plan = usePlanStore((s) => s.plan)
-  const viewOnly = usePlanStore((s) => s.viewOnly)
+  const linkViewOnly = usePlanStore((s) => s.linkViewOnly)
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
@@ -40,7 +40,7 @@ export function MobileGuests({ onShowOnMap }: { onShowOnMap: (tableId: string, g
   if (!plan.guests.length) {
     return (
       <p className="p-6 text-center text-sm text-muted">
-        {viewOnly ? 'Guest names aren’t included in this link.' : 'No guests yet. Add or import them on a computer.'}
+        {linkViewOnly ? 'Guest names aren’t included in this link.' : 'No guests yet. Add or import them on a computer.'}
       </p>
     )
   }

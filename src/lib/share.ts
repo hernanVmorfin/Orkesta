@@ -12,6 +12,7 @@ function sharedGuests(plan: Plan, viewOnly: boolean, guestNames: boolean): Guest
 export function shareUrl(plan: Plan, viewOnly: boolean, guestNames = false) {
   const lean: Plan = {
     ...plan,
+    shared: undefined,
     guests: sharedGuests(plan, viewOnly, guestNames),
     basemap: plan.basemap?.src.startsWith('data:') ? undefined : plan.basemap,
   }

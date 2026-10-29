@@ -262,39 +262,79 @@ OnePlan is outdoor site planning with paywalls: Free allows 25 objects; Pro is $
 
 The first deploy waits until the mobile companion (section 10, done) and both items below are built.
 
-You're setting up the cloud database yourself. The app builds against a config/env interface (a backend adapter configured with `VITE_*` variables), and nothing here creates accounts or infrastructure. Connection details get requested when the backend wiring starts. This replaces local-only storage only for shared event data; your own drafts can stay in IndexedDB.
+**Status (2026-10-29): Q1 and Q2 are built and tested in test mode.** No server is connected yet. You asked to skip the Azure work for now, so a test backend (`src/lib/backend/mock.ts`) stores the team, invites and messages in the browser and applies the same rules a server must. Connecting a real server is what's left before these features work across devices (see "Connecting a real server" below).
 
-### Q1. Users page, per event
+### Q1. Users page, per event (built)
 
-- **Invites:** invite people to an event by email or by a link. Pending invites can be resent or revoked.
-- **Roles:** each person gets a role per event:
-  - **Admin:** can edit the plan, manage people and send messages.
-  - **Staff:** can view the plan and guests, check guests in, and receive and reply to messages.
+- **Sharing:** "Share with my team" in the Team tab makes you the event's admin. Copies, imports and links always start unshared.
+- **Invites:**
+  - by email (works once, for that person) or as a link anyone can use; both expire after 7 days;
+  - pending invites can be copied again or cancelled;
+  - nothing is emailed yet: the admin copies the link and sends it.
+- **Roles, per event:**
+  - **Admin:** edits the plan, manages people and groups, and sends messages.
+  - **Staff:** sees the plan and guest details (dietary notes, not emails), checks guests in and reads messages. Everything else is read-only.
   - A person can be Admin on one event, Staff on another, and nothing on a third.
-- **Changes:** change a person's role, or remove them. Removing someone takes effect on their next sync.
-- **Where:** a "People" tab in the desktop right panel, and a list in the mobile Details tab.
-- **Data model (sketch):**
-  - `event_members (event_id, user_id, role, invited_by, created_at)`
-  - `event_invites (event_id, email | token, role, expires_at)`
-  - Access rules are enforced in the database, not just in the UI.
-- **Open questions:**
-  - Sign-in method (email magic link, Google, or both).
-  - Whether Staff can see guest emails and dietary notes (today, view-only links never carry them).
+- **Changes:** change roles or remove people; it applies right away. An event always keeps at least one admin.
+- **Where:**
+  - a **Team** tab (Messages | People) in the desktop right panel and in the phone tab bar;
+  - an account menu (top bar on desktop, Details tab on phones);
+  - the events menu also lists events shared with you that aren't on this device yet.
+- **Data model (for the server):**
+  - `event_members (event_id, user_id, role, joined_at)`
+  - `event_invites (event_id, email | null, role, token, expires_at)`
+  - `event_checkins (event_id, guest_id)`: kept apart from the plan, so an admin's save never undoes a staff check-in.
+- **Decided (2026-10-29):**
+  - **Sign-in:** email and password, planned on Azure (Microsoft Entra External ID); deferred.
+  - **Staff see guest details,** including dietary needs. Emails stay admin-only.
 
-### Q2. Staff messaging (builds on Q1)
+### Q2. Staff messaging (built)
 
-- **Broadcasts:** admins send a message to all staff of an event, or to a group (security, catering, stewards…). Groups could start from the Workforce roles in the library.
-- **Message options:** each message has a normal or **urgent** priority, and an optional **pinned map location** that opens the plan at that spot.
-- **For staff:** a new mobile **Messages** tab, alongside Map, Tables, Guests and Details. Staff can send short replies.
-- **For admins:** read receipts per message ("12 of 18 read"), plus a desktop panel to compose and read messages.
-- **Delivery:** live in the app (realtime subscription) while it's open. **Web push for urgent messages comes later.** On iPhone, push only works once the web app is added to the home screen (iOS 16.4+).
-- **Data model (sketch):**
-  - `messages (event_id, sender_id, audience: all | group, group_id, priority, body, pin_x, pin_y, created_at)`
+- **Broadcasts:** admins send to all staff or to a staff group, and manage the groups in the People view.
+- **Options:** normal or **urgent** priority, and an optional **pinned map location** (the selected object) that opens the plan there.
+- **Staff:**
+  - read-only Messages in the Team tab, with an unread badge;
+  - a red banner for unread urgent messages (phones also vibrate where supported);
+  - no replies.
+- **Admins:** compose on desktop or phone, and see read receipts per message ("Read by 3 of 5", with names and times).
+- **Delivery:** live in the app.
+  - The test backend delivers instantly between open tabs of the same browser.
+  - A real server can push updates (Web PubSub/SignalR), or the app can poll.
+  - **Web push for urgent messages comes later.** On iPhone it needs the web app added to the home screen (iOS 16.4+).
+- **Data model (for the server):**
+  - `messages (event_id, sender_id, audience: all | group, group_id, priority, body, pin, created_at)`
   - `message_reads (message_id, user_id, read_at)`
-  - `message_replies (message_id, user_id, body, created_at)`
-- **Open questions:**
-  - Message retention after the event.
-  - Whether replies go to all admins or only the sender.
-  - Group membership (assigned per person on the users page, or chosen by staff).
+  - `staff_groups (event_id, name)` and `staff_group_members (group_id, user_id)`
+- **Decided (2026-10-29):**
+  - Messages are **kept indefinitely**.
+  - **Only admins send;** staff can't reply.
+  - **The event's admins decide group membership.**
 
-**Order:** Q1, then Q2, then deploy, then real-device testing (section 10) on the hosted HTTPS build.
+### How syncing works
+
+- An admin's edits go to the server about a second after they're made; the top bar shows "Saved for the team".
+- Everyone else's copy follows the server's.
+- If two admins save at the same moment, the second save is refused instead of overwriting. That person's version is kept as a separate event named "… (your version)".
+- Each device keeps its copy in IndexedDB, so a shared event still opens offline (read-only for staff).
+
+### Connecting a real server (not built yet)
+
+The screens talk to one interface, `Backend` in `src/lib/backend/types.ts`. A real server implementation replaces the test backend in `src/lib/backend/index.ts`, and nothing else changes. The server must:
+
+- sign people in with email and password, and identify them on every request;
+- enforce the roles itself, because the browser can't be trusted to:
+  - only admins change the plan, people, groups and messages;
+  - staff get guests without emails;
+  - staff only see messages sent to everyone or to their groups;
+- refuse a plan save whose `baseUpdatedAt` isn't the current version (HTTP 409);
+- keep check-ins separate from the plan;
+- answer a small status call (role, plan version, check-ins) that the app can poll cheaply;
+- accept large plans: uploaded floor plan images can make them several MB.
+
+On Azure (your original plan, now deferred) that means:
+
+- a Microsoft Entra External ID tenant for sign-in;
+- a small API in front of the database (Azure Functions or App Service; the EC2 server could also host it);
+- Web PubSub/SignalR, or polling, for live updates.
+
+**Next:** connect a server (needed for teams across devices), deploy, then real-device testing (section 10) on the hosted HTTPS build. The app can also be deployed before a server exists, but team features then only work within one browser.

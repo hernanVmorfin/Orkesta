@@ -1,17 +1,22 @@
-import { useMemo, useState } from 'react'
-import { Check, Download, MapPin, Share2, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, Download, MapPin, Share2, ShieldCheck, TriangleAlert, Users } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
+import { openShared, refreshSharedList } from '../../store/team'
+import { AccountCard } from '../team/AccountMenu'
 import { isTableKind } from '../../lib/catalog'
 import { clearanceIssues } from '../../lib/geometry'
 import { canvasRef } from '../../lib/canvas'
 import { shareUrl } from '../../lib/share'
 import { summarize } from '../../lib/db'
 
-/** Phone Details tab: event summary, safety status, PDF, sharing and (on your own phone) switching events. */
+const ROLE_LABEL = { admin: 'Admin', staff: 'Staff' }
+
+/** Phone Details tab: event summary, safety status, PDF, sharing, switching events and your account. */
 export function MobileDetails() {
   const s = usePlanStore()
-  const { plan, viewOnly } = s
+  const { plan, linkViewOnly } = s
   const [busy, setBusy] = useState(false)
+  useEffect(() => { if (!linkViewOnly) void refreshSharedList() }, [linkViewOnly])
 
   const tables = plan.elements.filter((e) => isTableKind(e.kind))
   const seats = tables.reduce((n, t) => n + (t.seats ?? 0), 0)
@@ -27,7 +32,11 @@ export function MobileDetails() {
   const tagCounts = plan.tags
     .map((t) => ({ ...t, n: tables.filter((x) => (x.tag ?? 'general') === t.id).length }))
     .filter((t) => t.n > 0)
-  const events = viewOnly ? [] : s.events.some((e) => e.id === plan.id) ? s.events : [summarize(plan), ...s.events]
+  const events = linkViewOnly ? [] : s.events.some((e) => e.id === plan.id) ? s.events : [summarize(plan), ...s.events]
+  const roleOf = new Map(s.sharedEvents.map((e) => [e.eventId, e.role]))
+  const elsewhere = linkViewOnly ? [] : s.sharedEvents.filter((e) => !events.some((x) => x.id === e.eventId))
+  // Shared events are passed on by their admins
+  const canShare = linkViewOnly || !plan.shared || s.role === 'admin'
 
   const downloadPdf = async () => {
     if (!canvasRef.current) return
@@ -38,7 +47,7 @@ export function MobileDetails() {
 
   /** Shares a view-only link without guest details (or passes this link on), falling back to the clipboard. */
   const share = async () => {
-    const url = viewOnly ? window.location.href : shareUrl(plan, true)
+    const url = linkViewOnly ? window.location.href : shareUrl(plan, true)
     if (navigator.share) {
       try { await navigator.share({ title: plan.name, url }); return } catch (err) { if ((err as Error).name === 'AbortError') return }
     }
@@ -84,10 +93,12 @@ export function MobileDetails() {
           <button className="btn h-12 w-full justify-center border border-bg-2 text-[15px]" disabled={busy} onClick={() => void downloadPdf()}>
             <Download size={17} />{busy ? 'Creating PDF…' : 'Download PDF plan'}
           </button>
-          <button className="btn h-12 w-full justify-center border border-bg-2 text-[15px]" onClick={() => void share()}>
-            <Share2 size={17} />{viewOnly ? 'Share this link' : 'Share view-only link'}
-          </button>
-          {!viewOnly && <p className="text-xs text-muted">The shared link includes the plan and satellite view, but no guest details or uploaded drawings.</p>}
+          {canShare && (
+            <button className="btn h-12 w-full justify-center border border-bg-2 text-[15px]" onClick={() => void share()}>
+              <Share2 size={17} />{linkViewOnly ? 'Share this link' : 'Share view-only link'}
+            </button>
+          )}
+          {canShare && !linkViewOnly && <p className="text-xs text-muted">The shared link includes the plan and satellite view, but no guest details or uploaded drawings.</p>}
         </section>
 
         {events.length > 0 && (
@@ -99,13 +110,41 @@ export function MobileDetails() {
                   <button className="flex min-h-14 w-full items-center gap-2 px-3 py-2 text-left active:bg-bg" onClick={() => void s.openEvent(ev.id)}>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[15px] text-ink">{ev.name || 'Untitled event'}</div>
-                      <div className="truncate text-xs text-muted">{[ev.venue, ev.date].filter(Boolean).join(' · ') || 'No venue yet'}</div>
+                      <div className="truncate text-xs text-muted">
+                        {(ev.shared || roleOf.has(ev.id)) && `${ROLE_LABEL[roleOf.get(ev.id)!] ?? 'Shared'} · `}{[ev.venue, ev.date].filter(Boolean).join(' · ') || 'No venue yet'}
+                      </div>
                     </div>
                     {ev.id === plan.id && <Check size={18} className="shrink-0 text-accent-deep" aria-label="Open now" />}
                   </button>
                 </li>
               ))}
             </ul>
+          </section>
+        )}
+
+        {elsewhere.length > 0 && (
+          <section>
+            <div className="eyebrow mb-1">Shared with you</div>
+            <ul className="divide-y divide-bg-2 rounded-xl border border-bg-2">
+              {elsewhere.map((ev) => (
+                <li key={ev.eventId}>
+                  <button className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left active:bg-bg" onClick={() => void openShared(ev.eventId)}>
+                    <Users size={18} className="shrink-0 text-muted" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[15px] text-ink">{ev.name || 'Untitled event'}</div>
+                      <div className="truncate text-xs text-muted">{ROLE_LABEL[ev.role]} · tap to download it to this phone</div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {!linkViewOnly && (
+          <section>
+            <div className="eyebrow mb-1">Account</div>
+            <div className="rounded-xl border border-bg-2"><AccountCard /></div>
           </section>
         )}
       </div>

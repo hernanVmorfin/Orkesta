@@ -7,11 +7,15 @@ import { readShared } from '../lib/share'
 import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
 import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seating'
+import type { Account, Invite, Member, Message, Role, SharedEventInfo, StaffGroup } from '../lib/backend'
 
 /** 'geo' drags the satellite under the plan to line it up with the venue. */
 export type Tool = 'select' | 'measure' | 'geo'
-export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue'
+export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue' | 'team'
 export type SaveState = 'saved' | 'saving' | 'error'
+/** Shared events only: whether this device's edits have reached the server. */
+export type SyncState = 'idle' | 'syncing' | 'synced' | 'error'
+export interface People { members: Member[]; invites: Invite[]; groups: StaffGroup[] }
 
 /** Pre-IndexedDB single-plan autosave, migrated on first load. */
 const LEGACY_KEY = 'inbest-floorplan:v1'
@@ -36,6 +40,9 @@ interface State {
   /** Below 1280 px the library and right panel are slide-over drawers; these open them. */
   showLibrary: boolean
   showPanel: boolean
+  /** Opened from a view-only link: shown straight from the URL and never saved. */
+  linkViewOnly: boolean
+  /** Nothing can be edited: view-only links, and shared events unless you're one of the event's admins. */
   viewOnly: boolean
   measure: { a: Pt; b: Pt } | null
   rightTab: RightTab
@@ -44,6 +51,21 @@ interface State {
   hydrated: boolean
   saveState: SaveState
   events: EventSummary[]
+
+  // Team (see store/team.ts)
+  account: Account | null
+  /** null until the backend has loaded */
+  backendMode: 'mock' | 'server' | null
+  /** Your role in the open event when it's shared; null for your own unshared events */
+  role: Role | null
+  syncState: SyncState
+  /** Events shared with your account, from the server */
+  sharedEvents: SharedEventInfo[]
+  /** Open event's messages, newest first */
+  messages: Message[]
+  /** Open event's team; loaded while the Team panel is showing */
+  people: People | null
+  teamView: 'messages' | 'people'
 
   set: (p: Partial<State>) => void
   checkpoint: () => void
@@ -55,6 +77,8 @@ interface State {
   deleteEvent: (id: string) => Promise<void>
   /** Adds a plan (JSON file, shared copy) as a new event, so it never overwrites an existing one. */
   importPlan: (p: Plan) => Promise<void>
+  /** Saves a plan under its own id (a shared event from the server) and opens it. */
+  openPlan: (p: Plan) => Promise<void>
   undo: () => void
   redo: () => void
 
@@ -117,6 +141,7 @@ export const usePlanStore = create<State>((set, get) => ({
   showLabels: true,
   showLibrary: false,
   showPanel: false,
+  linkViewOnly: init.viewOnly,
   viewOnly: init.viewOnly,
   measure: null,
   rightTab: 'tables',
@@ -124,6 +149,14 @@ export const usePlanStore = create<State>((set, get) => ({
   hydrated: init.viewOnly,
   saveState: 'saved',
   events: [],
+  account: null,
+  backendMode: null,
+  role: null,
+  syncState: 'idle',
+  sharedEvents: [],
+  messages: [],
+  people: null,
+  teamView: 'messages',
 
   set: (p) => set(p),
   checkpoint: () => set((s) => ({ past: [...s.past.slice(-HISTORY_LIMIT), s.plan], future: [] })),
@@ -138,7 +171,7 @@ export const usePlanStore = create<State>((set, get) => ({
     try {
       if (shared) {
         // Editable copy from a link: keep it as its own event and drop the hash so a reload doesn't import it again
-        plan = { ...shared.plan, id: nanoid(10), updatedAt: Date.now() }
+        plan = { ...shared.plan, id: nanoid(10), updatedAt: Date.now(), shared: undefined }
         await db.savePlan(plan)
         history.replaceState(null, '', window.location.pathname + window.location.search)
       } else {
@@ -182,7 +215,13 @@ export const usePlanStore = create<State>((set, get) => ({
   },
   importPlan: async (p) => {
     await flushSave()
-    const plan = { ...p, id: nanoid(10), updatedAt: Date.now() }
+    const plan = { ...p, id: nanoid(10), updatedAt: Date.now(), shared: undefined }
+    rememberCurrent(plan.id)
+    set({ plan, ...clearHistory })
+    await persist(plan)
+  },
+  openPlan: async (plan) => {
+    await flushSave()
     rememberCurrent(plan.id)
     set({ plan, ...clearHistory })
     await persist(plan)
@@ -273,7 +312,7 @@ export const usePlanStore = create<State>((set, get) => ({
   },
 }))
 
-// Autosave to IndexedDB (local only; real-time sync is the Phase 2 backend, see PROMPT.md)
+// Autosave to IndexedDB. Shared events are also sent to the server, see store/team.ts
 let t: ReturnType<typeof setTimeout> | undefined
 let pending: Plan | null = null
 
@@ -302,9 +341,16 @@ function cancelSave() {
 }
 
 usePlanStore.subscribe((s, prev) => {
-  // Switching events (id change) or finishing hydration loads a plan; it doesn't edit one
-  if (s.plan === prev.plan || s.viewOnly || !prev.hydrated || s.plan.id !== prev.plan.id) return
+  // Switching events (id change) or finishing hydration loads a plan; it doesn't edit one.
+  // Staff copies of shared events are saved too: check-ins and the latest version from the server.
+  if (s.plan === prev.plan || s.linkViewOnly || !prev.hydrated || s.plan.id !== prev.plan.id) return
   pending = s.plan
   clearTimeout(t)
   t = setTimeout(() => { void flushSave() }, 400)
+})
+
+// Shared events can only be edited by their admins
+usePlanStore.subscribe((s) => {
+  const viewOnly = s.linkViewOnly || (!!s.plan.shared && s.role !== 'admin')
+  if (viewOnly !== s.viewOnly) usePlanStore.setState({ viewOnly, ...(viewOnly ? { placing: null, tool: 'select' as const, measure: null } : {}) })
 })

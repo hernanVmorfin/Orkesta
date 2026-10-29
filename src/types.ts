@@ -93,4 +93,6 @@ export interface Plan {
   geo?: GeoAnchor
   layers: Record<LayerId, LayerState>
   updatedAt: number
+  /** Shared with a team: the server holds the latest copy, its people and roles. Copies and imports start unshared. */
+  shared?: boolean
 }

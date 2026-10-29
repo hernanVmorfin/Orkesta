@@ -1,7 +1,7 @@
 import type { Plan } from '../types'
 
 /** Local event storage in IndexedDB. Plans (with uploaded basemaps) are far bigger than localStorage's ~5 MB allows. */
-export interface EventSummary { id: string; name: string; venue: string; date: string; updatedAt: number }
+export interface EventSummary { id: string; name: string; venue: string; date: string; updatedAt: number; shared?: boolean }
 
 const DB_NAME = 'inbest-floorplan'
 let dbp: Promise<IDBDatabase> | undefined
@@ -25,7 +25,7 @@ const done = (tx: IDBTransaction) =>
 const result = <T>(req: IDBRequest<T>) =>
   new Promise<T>((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error) })
 
-export const summarize = (p: Plan): EventSummary => ({ id: p.id, name: p.name, venue: p.venue, date: p.date, updatedAt: p.updatedAt })
+export const summarize = (p: Plan): EventSummary => ({ id: p.id, name: p.name, venue: p.venue, date: p.date, updatedAt: p.updatedAt, shared: p.shared })
 
 export async function savePlan(p: Plan) {
   const tx = (await open()).transaction(['plans', 'summaries'], 'readwrite')

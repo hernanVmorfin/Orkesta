@@ -19,9 +19,11 @@ npm run build    # production build in dist/
 - Aisle clearance checks (default 1.2 m, editable in Venue).
 - Exports: A3 PDF with iNBest title block, PNG, seating CSV, project JSON.
 - Share links (view-only or editable copy) encoded in the URL. View-only links leave out the guest list unless you choose to show names; emails and dietary notes are never included. Opening an editable copy adds it as a new event.
-- Phones (under 768 px wide) get a read-only mobile companion with four tabs. Map: the plan (and satellite) with pinch-to-zoom, drag to pan, tap a table to see who sits there, and a guest/table search that centers the map. Tables: fill bars and a tag filter. Guests: search, filters (unseated, checked in) and a check-in button (on your own phone; view-only links show status only). Details: event summary, aisle-check status, tag counts, PDF download, a view-only share link without guest details, and switching between your events. "Show on map" works from any table or guest.
+- Phones (under 768 px wide) get a read-only mobile companion with five tabs. Map: the plan (and satellite) with pinch-to-zoom, drag to pan, tap a table to see who sits there, and a guest/table search that centers the map. Tables: fill bars and a tag filter. Guests: search, filters (unseated, checked in) and a check-in button (on your own phone or as event staff; view-only links show status only). Team: messages and people (see Teams below). Details: event summary, aisle-check status, tag counts, PDF download, a view-only share link without guest details, and switching between your events. "Show on map" works from any table or guest.
 - Tablets and small laptops (768 to 1279 px): the library and right panel become slide-over drawers (Objects and Panel buttons), view toggles fold into a View menu, and the plan gets the full width. On touch screens buttons grow to 40 px, delete actions are always visible, and pinch-to-zoom works in the editor. Seat guests on touch with the table picker in the guest list or the Inspector.
 - Multiple events saved in the browser (IndexedDB, including uploaded basemaps): switch, create, duplicate and delete from the menu next to the event name. The top bar shows "Not saved" if the browser blocks storage.
+- Teams (Team tab, desktop and phone): share an event, invite people by email or link, and give each person a role for that event. Admins edit the plan and manage people; staff see the plan and guest details (no emails), check guests in and read messages. Admins message all staff or a group, mark messages urgent (a banner on staff screens) and pin a place on the map, and see who has read each message. See ROADMAP.md section 11.
+- Test mode: no server is connected yet. A test backend keeps the team, invites and messages in this browser and applies the same rules a server must. Each browser tab signs in separately, so open an invite link in a second tab to try the app as that person and watch messages arrive live. Switch test accounts from the account menu.
 
 Confirm safety marker positions (extinguishers, exits, first aid) with the venue and local civil protection.
 
@@ -39,8 +41,11 @@ src/
   lib/geo.ts                satellite tiles, geo anchor math, place search
   lib/seating.ts            auto-seat algorithm
   lib/useMediaQuery.ts      phone breakpoint (MOBILE_QUERY)
+  lib/backend/              Backend interface (types.ts) and the in-browser test backend (mock.ts)
   components/mobile/        MobileApp (shell, tabs), MobileMap, MobileTables, MobileGuests, MobileDetails, Sheets (bottom sheets, check-in)
+  components/team/          TeamPanel, PeopleSection, MessagesSection, AccountMenu, UrgentBanner
   store/usePlanStore.ts     Zustand store, undo/redo, events, autosave
+  store/team.ts             sign-in, roles, sharing and sync, invites, check-in, messages
   components/               TopBar, EventsMenu, Library, FloorCanvas, ElementShape, RightPanel,
                             Inspector, TablesPanel, LayersPanel, VenuePanel, SatelliteSection, ShareDialog
 ```
@@ -57,4 +62,4 @@ VITE_SATELLITE_ATTRIBUTION="Imagery © Your provider"
 Nominatim allows about 1 search per second and no search-as-you-type; the app only searches on submit.
 
 ## Phase 2
-Real-time collaboration (Supabase Realtime or Liveblocks), vendor roles, comments, revision history, geo-referenced aerial basemaps. See `PROMPT.md`.
+Connect a real server for teams across devices (ROADMAP.md section 11), then live co-editing, vendor roles, comments and revision history. See `PROMPT.md`.

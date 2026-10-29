@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Upload, Download, Wand2, UserPlus, Trash2, CheckCircle2, Circle, GripVertical } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
+import { checkIn, useCanCheckIn } from '../store/team'
 import { isTableKind } from '../lib/catalog'
 import { CSV_TEMPLATE, download, guestsToCsv, parseGuestsCsv } from '../lib/csv'
 import type { FillMode } from '../lib/seating'
@@ -10,6 +11,7 @@ type Filter = 'all' | 'unassigned' | 'assigned'
 export function TablesPanel() {
   const s = usePlanStore()
   const { plan, viewOnly } = s
+  const canCheckIn = useCanCheckIn()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [name, setName] = useState('')
@@ -152,7 +154,7 @@ export function TablesPanel() {
             onDragStart={(e) => e.dataTransfer.setData('application/x-guest', g.id)}
             className="group flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 hover:border-bg-2 hover:bg-bg">
             {!viewOnly && <GripVertical size={14} className="shrink-0 cursor-grab text-muted/50" />}
-            <button title="Toggle check-in" onClick={() => s.updateGuest(g.id, { checkedIn: !g.checkedIn })} disabled={viewOnly}>
+            <button title={g.checkedIn ? 'Undo check-in' : 'Check in'} aria-pressed={!!g.checkedIn} onClick={() => checkIn(g.id, !g.checkedIn)} disabled={!canCheckIn}>
               {g.checkedIn ? <CheckCircle2 size={15} className="text-green-600" /> : <Circle size={15} className="text-muted/50" />}
             </button>
             <div className="min-w-0 flex-1">

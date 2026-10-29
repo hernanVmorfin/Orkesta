@@ -5,6 +5,8 @@ import { FloorCanvas } from './components/FloorCanvas'
 import { RightPanel } from './components/RightPanel'
 import { MobileApp } from './components/mobile/MobileApp'
 import { usePlanStore } from './store/usePlanStore'
+import { acceptInvite, initTeam, openMessages, takeInviteToken } from './store/team'
+import { UrgentBanner } from './components/team/UrgentBanner'
 import { requestFit } from './lib/canvas'
 import { MOBILE_QUERY, useIsMobile, useIsWide } from './lib/useMediaQuery'
 
@@ -17,11 +19,24 @@ export default function App() {
   const wide = useIsWide()
   const [toast, setToast] = useState<string | null>(null)
 
-  useEffect(() => { void usePlanStore.getState().hydrate() }, [])
+  useEffect(() => {
+    // Taken before anything awaits, so a second run of this effect can't use it again
+    const invite = takeInviteToken()
+    void (async () => {
+      await usePlanStore.getState().hydrate()
+      await initTeam()
+      if (invite) await acceptInvite(invite)
+    })()
+  }, [])
 
   useEffect(() => {
     let t: ReturnType<typeof setTimeout>
-    const onToast = (e: Event) => { setToast((e as CustomEvent<string>).detail); clearTimeout(t); t = setTimeout(() => setToast(null), 2200) }
+    const onToast = (e: Event) => {
+      const msg = (e as CustomEvent<string>).detail
+      setToast(msg)
+      clearTimeout(t)
+      t = setTimeout(() => setToast(null), Math.max(2200, msg.length * 60))
+    }
     window.addEventListener('fp:toast', onToast)
     return () => window.removeEventListener('fp:toast', onToast)
   }, [])
@@ -80,6 +95,7 @@ export default function App() {
             {(wide || showPanel) && (
               <div className={wide ? 'contents' : 'absolute inset-y-0 right-0 z-30 flex shadow-xl'}><RightPanel /></div>
             )}
+            <UrgentBanner onView={openMessages} className="absolute left-1/2 top-3 z-40 w-[min(520px,calc(100%-32px))] -translate-x-1/2" />
           </div>
         </div>
       )}

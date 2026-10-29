@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Undo2, Redo2, ZoomIn, ZoomOut, Maximize, MousePointer2, Ruler, Grid3x3, Magnet, Image as ImageIcon,
-  TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff, Satellite, SlidersHorizontal, Shapes, PanelRight, Check,
+  TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff, Satellite, SlidersHorizontal, Shapes, PanelRight, Check, Cloud,
 } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { useIsWide } from '../lib/useMediaQuery'
@@ -9,11 +9,13 @@ import { canvasRef, requestFit } from '../lib/canvas'
 import { download, guestsToCsv } from '../lib/csv'
 import { ShareDialog } from './ShareDialog'
 import { EventsMenu } from './EventsMenu'
+import { AccountMenu } from './team/AccountMenu'
 
 // jsPDF and html2canvas are large; load them only when an export runs
 const exporter = () => import('../lib/exportPlan')
 
 const SAVE_LABEL = { saved: 'Autosaved', saving: 'Saving…', error: 'Not saved' }
+const SYNC_LABEL = { idle: 'Autosaved', syncing: 'Saving for the team…', synced: 'Saved for the team', error: 'Not sent to the team' }
 
 function Toggle({ on, onClick, title, children }: { on: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return <button title={title} onClick={onClick} className={`btn px-2 ${on ? 'btn-ghost-active' : ''}`}>{children}</button>
@@ -61,7 +63,7 @@ export function TopBar() {
           className="block w-32 truncate bg-transparent text-sm font-semibold text-ink outline-none lg:w-48 xl:w-60" />
         <div className="truncate text-[11px] text-muted">{s.plan.venue}{s.plan.date ? ` · ${s.plan.date}` : ''}</div>
       </div>
-      {!s.viewOnly && <EventsMenu />}
+      {!s.linkViewOnly && <EventsMenu />}
 
       {!s.viewOnly && (
         <div className="ml-1 flex items-center gap-1 xl:ml-4">
@@ -104,7 +106,17 @@ export function TopBar() {
 
       <div className="ml-auto flex items-center gap-2">
         {s.viewOnly ? (
-          <span className="flex items-center gap-1 rounded-full bg-bg-2 px-3 py-1 text-xs text-ink-2"><Eye size={14} /> View-only link</span>
+          <span className="flex items-center gap-1 whitespace-nowrap rounded-full bg-bg-2 px-3 py-1 text-xs text-ink-2"
+            title={s.role === 'staff' ? 'You can check guests in. Only the event’s admins can change the plan.' : undefined}>
+            <Eye size={14} /> {s.linkViewOnly ? 'View-only link' : s.role === 'staff' ? 'Staff view' : !s.account ? 'Sign in to edit' : 'View only'}
+          </span>
+        ) : s.plan.shared && s.syncState === 'error' ? (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-red-600"
+            title="Your changes are saved on this device and will be sent to the team when the connection is back.">
+            <CloudOff size={12} /> {SYNC_LABEL.error}
+          </span>
+        ) : s.plan.shared && s.saveState !== 'error' ? (
+          <span className="hidden items-center gap-1 text-[11px] text-muted xl:flex"><Cloud size={12} /> {SYNC_LABEL[s.syncState]}</span>
         ) : s.saveState === 'error' ? (
           <span className="flex items-center gap-1 text-[11px] font-medium text-red-600"
             title="This browser blocked saving. Export a project file (.json) to keep your work.">
@@ -113,7 +125,10 @@ export function TopBar() {
         ) : (
           <span className="hidden items-center gap-1 text-[11px] text-muted xl:flex"><Pencil size={12} /> {SAVE_LABEL[s.saveState]}</span>
         )}
-        <button className="btn" onClick={() => setShare(true)} title="Share"><Share2 size={16} /><span className="hidden lg:inline">Share</span></button>
+        {/* Shared events are passed on by their admins */}
+        {(!s.plan.shared || s.role === 'admin' || s.linkViewOnly) && (
+          <button className="btn" onClick={() => setShare(true)} title="Share a link"><Share2 size={16} /><span className="hidden lg:inline">Share</span></button>
+        )}
         <div className="relative">
           <button className="btn btn-primary" disabled={busy} onClick={() => setMenu(!menu)} title="Export">
             <FileDown size={16} /><span className="hidden lg:inline">{busy ? 'Exporting…' : 'Export'}</span>
@@ -132,6 +147,7 @@ export function TopBar() {
           )}
         </div>
         {!wide && <Toggle title="Panel" on={s.showPanel} onClick={() => s.set({ showPanel: !s.showPanel })}><PanelRight size={16} /></Toggle>}
+        {!s.linkViewOnly && <AccountMenu />}
       </div>
       {share && <ShareDialog onClose={() => setShare(false)} />}
     </header>

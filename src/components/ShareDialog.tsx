@@ -47,7 +47,7 @@ export function ShareDialog({ onClose }: { onClose: () => void }) {
           <button onClick={copy} className="btn btn-primary shrink-0">{copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copied' : 'Copy'}</button>
         </div>
         <p className="mt-3 text-[11px] leading-snug text-muted">
-          Prototype: the plan is encoded in the link itself (snapshot). Phase 2 swaps this for a hosted, real-time room (Supabase Realtime or Liveblocks) so every link always shows the latest revision.
+          The link holds a snapshot of the plan as it is now. To work on the live event with your team, invite them from the Team tab.
           {plan.basemap?.src.startsWith('data:') && ' Uploaded basemaps are not included in links.'}
         </p>
       </div>

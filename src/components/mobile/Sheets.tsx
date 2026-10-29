@@ -1,5 +1,6 @@
 import { X, Check, CheckCircle2, MapPin } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
+import { checkIn, useCanCheckIn } from '../../store/team'
 import { CATALOG, LAYERS, isTableKind } from '../../lib/catalog'
 import type { Guest, PlanElement, TableTag } from '../../types'
 
@@ -37,14 +38,13 @@ export function FilterChip({ active, onClick, children }: { active: boolean; onC
   )
 }
 
-/** Big round check-in toggle. View-only links can't save, so they only show the status. */
+/** Big round check-in toggle for admins and staff. View-only links can't save, so they only show the status. */
 export function CheckInToggle({ g }: { g: Guest }) {
-  const viewOnly = usePlanStore((s) => s.viewOnly)
-  const updateGuest = usePlanStore((s) => s.updateGuest)
-  if (viewOnly) return g.checkedIn ? <CheckCircle2 size={18} className="mx-3 shrink-0 text-green-600" aria-label="Checked in" /> : <span className="w-11 shrink-0" />
+  const canCheckIn = useCanCheckIn()
+  if (!canCheckIn) return g.checkedIn ? <CheckCircle2 size={18} className="mx-3 shrink-0 text-green-600" aria-label="Checked in" /> : <span className="w-11 shrink-0" />
   return (
     <button aria-pressed={!!g.checkedIn} aria-label={g.checkedIn ? `Undo check-in for ${g.name}` : `Check in ${g.name}`}
-      onClick={() => updateGuest(g.id, { checkedIn: !g.checkedIn })}
+      onClick={() => checkIn(g.id, !g.checkedIn)}
       className={`grid h-11 w-11 shrink-0 place-items-center rounded-full border ${g.checkedIn ? 'border-green-600 bg-green-50 text-green-700' : 'border-bg-2 text-muted active:bg-bg'}`}>
       <Check size={18} />
     </button>
@@ -54,7 +54,7 @@ export function CheckInToggle({ g }: { g: Guest }) {
 /** A table (who sits there) or any other object (what it is). */
 export function ObjectSheet({ e, foundGuest, onClose, onShowOnMap }: { e: PlanElement; foundGuest: string | null; onClose: () => void; onShowOnMap?: () => void }) {
   const plan = usePlanStore((s) => s.plan)
-  const viewOnly = usePlanStore((s) => s.viewOnly)
+  const linkViewOnly = usePlanStore((s) => s.linkViewOnly)
   const isTable = isTableKind(e.kind)
   const tag = isTable ? plan.tags.find((t) => t.id === e.tag) : undefined
   const guests = isTable ? plan.guests.filter((g) => g.tableId === e.id) : []
@@ -78,7 +78,7 @@ export function ObjectSheet({ e, foundGuest, onClose, onShowOnMap }: { e: PlanEl
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-muted">{viewOnly && !plan.guests.length ? 'Guest names aren’t included in this link.' : 'No guests at this table yet.'}</p>
+        <p className="mt-2 text-sm text-muted">{linkViewOnly && !plan.guests.length ? 'Guest names aren’t included in this link.' : 'No guests at this table yet.'}</p>
       ))}
       {!isTable && (
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
@@ -91,11 +91,10 @@ export function ObjectSheet({ e, foundGuest, onClose, onShowOnMap }: { e: PlanEl
   )
 }
 
-/** One guest: table, details the owner can see, and check-in. */
+/** One guest: table, details (links leave out dietary notes and emails; staff get no emails), and check-in. */
 export function GuestSheet({ g, onClose, onShowOnMap }: { g: Guest; onClose: () => void; onShowOnMap?: (tableId: string) => void }) {
   const plan = usePlanStore((s) => s.plan)
-  const viewOnly = usePlanStore((s) => s.viewOnly)
-  const updateGuest = usePlanStore((s) => s.updateGuest)
+  const canCheckIn = useCanCheckIn()
   const table = plan.elements.find((e) => e.id === g.tableId)
   const tag = g.tag ? plan.tags.find((t) => t.id === g.tag) : undefined
 
@@ -104,16 +103,16 @@ export function GuestSheet({ g, onClose, onShowOnMap }: { g: Guest; onClose: () 
       <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-muted">Table</dt>
         <dd className={table ? 'text-ink' : 'text-red-600'}>{table ? table.label : 'No table yet'}</dd>
-        {!viewOnly && g.dietary && <><dt className="text-muted">Dietary</dt><dd className="text-ink">{g.dietary}</dd></>}
-        {!viewOnly && g.email && <><dt className="text-muted">Email</dt><dd className="truncate text-ink">{g.email}</dd></>}
+        {g.dietary && <><dt className="text-muted">Dietary</dt><dd className="text-ink">{g.dietary}</dd></>}
+        {g.email && <><dt className="text-muted">Email</dt><dd className="truncate text-ink">{g.email}</dd></>}
       </dl>
       <div className="mt-3 flex gap-2">
         {table && onShowOnMap && (
           <button className="btn h-11 flex-1 justify-center border border-bg-2" onClick={() => onShowOnMap(table.id)}><MapPin size={16} />Show on map</button>
         )}
-        {!viewOnly && (
+        {canCheckIn && (
           <button className={`btn h-11 flex-1 justify-center ${g.checkedIn ? 'border border-green-600 text-green-700' : 'btn-primary'}`}
-            aria-pressed={!!g.checkedIn} onClick={() => updateGuest(g.id, { checkedIn: !g.checkedIn })}>
+            aria-pressed={!!g.checkedIn} onClick={() => checkIn(g.id, !g.checkedIn)}>
             {g.checkedIn ? <><CheckCircle2 size={16} />Checked in</> : <><Check size={16} />Check in</>}
           </button>
         )}
