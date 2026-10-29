@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Geist";
+  src: url("/brand/Geist-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/* iNBest brand tokens (source of truth: inbest-brand skill, tokens.css) */
+@theme {
+  --color-bg: #f3f6fa;
+  --color-bg-2: #e7ecf3;
+  --color-ink: #0a1729;
+  --color-ink-2: #1c2638;
+  --color-muted: #5b6576;
+  --color-accent: #1ea7e8;
+  --color-accent-deep: #075e99;
+  --color-accent-on-dark: #64c7f5;
+  --color-on-ink: #eaf1fa;
+  --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --radius-brand: 12px;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+@layer components {
+.eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+.em { font-family: var(--font-serif); font-style: italic; color: var(--color-accent-deep); }
+.btn { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 10px; border-radius:8px; font-size:13px; font-weight:500; color: var(--color-ink-2); transition: background .15s; }
+.btn:hover { background: var(--color-bg-2); }
+.btn-primary { background: var(--color-accent); color: white; }
+.btn-primary:hover { background: var(--color-accent-deep); }
+.btn-ghost-active { background: var(--color-ink); color: var(--color-on-ink); }
+.btn-ghost-active:hover { background: var(--color-ink-2); }
+.input { width:100%; height:30px; padding:0 8px; border:1px solid #d5dde8; border-radius:6px; font-size:13px; background:white; }
+.input:focus { outline: 2px solid var(--color-accent); outline-offset: -1px; }
+}
+.panel-scroll::-webkit-scrollbar { width: 8px; }
+.panel-scroll::-webkit-scrollbar-thumb { background: #cfd8e3; border-radius: 4px; }

@@ -1,0 +1,81 @@
+export type LayerId =
+  | 'structure' | 'staging' | 'seating' | 'service' | 'safety'
+  | 'security' | 'workforce' | 'wayfinding' | 'decor' | 'notes'
+
+export type Shape =
+  | 'roundTable' | 'rectTable' | 'cocktail' | 'rect' | 'icon' | 'zone' | 'plant' | 'line' | 'text'
+
+export interface Pt { x: number; y: number }
+
+export interface CatalogItem {
+  kind: string
+  name: string
+  layer: LayerId
+  shape: Shape
+  /** width / height in meters */
+  w: number
+  h: number
+  color: string
+  icon?: string
+  seats?: number
+}
+
+export interface PlanElement {
+  id: string
+  kind: string
+  label: string
+  /** center position in meters */
+  x: number
+  y: number
+  w: number
+  h: number
+  rotation: number
+  layer: LayerId
+  locked?: boolean
+  seats?: number
+  number?: number
+  tag?: string
+  color?: string
+  notes?: string
+}
+
+export interface Guest {
+  id: string
+  name: string
+  company?: string
+  group?: string
+  email?: string
+  dietary?: string
+  tableId?: string | null
+  checkedIn?: boolean
+}
+
+export interface TableTag { id: string; name: string; color: string }
+
+export interface Basemap {
+  src: string
+  /** real-world width of the image in meters (height derived from aspect) */
+  widthM: number
+  aspect: number
+  x: number
+  y: number
+  opacity: number
+}
+
+export interface LayerState { visible: boolean; locked: boolean }
+
+export interface Plan {
+  id: string
+  name: string
+  venue: string
+  date: string
+  widthM: number
+  heightM: number
+  minAisleM: number
+  elements: PlanElement[]
+  guests: Guest[]
+  tags: TableTag[]
+  basemap?: Basemap
+  layers: Record<LayerId, LayerState>
+  updatedAt: number
+}
