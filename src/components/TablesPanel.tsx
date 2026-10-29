@@ -100,9 +100,9 @@ export function TablesPanel() {
           <div className="eyebrow">Guest list</div>
           {!viewOnly && (
             <div className="flex gap-1">
-              <button className="btn h-7 px-2 text-xs" onClick={() => fileRef.current?.click()} title="Import CSV: name, company, group, email, dietary, table"><Upload size={13} />CSV</button>
-              <button className="btn h-7 px-2 text-xs" onClick={() => download('guests-template.csv', CSV_TEMPLATE, 'text/csv')} title="Download CSV template"><Download size={13} />Template</button>
-              <button className={`btn h-7 px-2 text-xs ${autoOpen ? 'btn-ghost-active' : ''}`} onClick={() => setAutoOpen(!autoOpen)} title="Auto-seat guests"><Wand2 size={13} />Auto</button>
+              <button className="btn h-7 pointer-coarse:h-10 px-2 text-xs" onClick={() => fileRef.current?.click()} title="Import CSV: name, company, group, email, dietary, table"><Upload size={13} />CSV</button>
+              <button className="btn h-7 pointer-coarse:h-10 px-2 text-xs" onClick={() => download('guests-template.csv', CSV_TEMPLATE, 'text/csv')} title="Download CSV template"><Download size={13} />Template</button>
+              <button className={`btn h-7 pointer-coarse:h-10 px-2 text-xs ${autoOpen ? 'btn-ghost-active' : ''}`} onClick={() => setAutoOpen(!autoOpen)} title="Auto-seat guests"><Wand2 size={13} />Auto</button>
             </div>
           )}
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = '' }} />
@@ -126,8 +126,8 @@ export function TablesPanel() {
               Keeps groups and companies together, seats tagged guests (VIP, Sponsor…) at tables with the same tag, and splits big groups across neighbouring tables.
             </p>
             <div className="flex justify-end gap-1">
-              <button className="btn h-7 text-xs" onClick={() => setAutoOpen(false)}>Cancel</button>
-              <button className="btn btn-primary h-7 text-xs" onClick={runAuto}><Wand2 size={13} />Seat guests</button>
+              <button className="btn h-7 pointer-coarse:h-10 text-xs" onClick={() => setAutoOpen(false)}>Cancel</button>
+              <button className="btn btn-primary h-7 pointer-coarse:h-10 text-xs" onClick={runAuto}><Wand2 size={13} />Seat guests</button>
             </div>
           </div>
         )}
@@ -135,7 +135,7 @@ export function TablesPanel() {
           <form className="flex gap-1" onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return; s.addGuests([{ name: name.trim(), company: company.trim() || undefined, tableId: null }]); setName(''); setCompany('') }}>
             <input className="input" placeholder="Guest name" value={name} onChange={(e) => setName(e.target.value)} />
             <input className="input w-28" placeholder="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
-            <button className="btn btn-primary h-[30px] shrink-0 px-2" title="Add guest"><UserPlus size={15} /></button>
+            <button className="btn btn-primary h-[30px] shrink-0 pointer-coarse:h-10 px-2" title="Add guest"><UserPlus size={15} /></button>
           </form>
         )}
         <div className="flex gap-1">
@@ -159,17 +159,17 @@ export function TablesPanel() {
               <div className="truncate text-sm">{g.name}</div>
               {(g.company || g.group) && <div className="truncate text-[11px] text-muted">{[g.company, g.group].filter(Boolean).join(' · ')}</div>}
             </div>
-            <select className="input h-7 w-[76px] px-1 text-xs" title="Guest tag (auto-seat matches it to table tags)" disabled={viewOnly}
+            <select className="input h-7 pointer-coarse:h-10 w-[76px] px-1 text-xs" title="Guest tag (auto-seat matches it to table tags)" disabled={viewOnly}
               value={g.tag ?? 'general'} style={{ color: tagById.get(g.tag ?? 'general')?.color }}
               onChange={(e) => s.updateGuest(g.id, { tag: e.target.value === 'general' ? undefined : e.target.value })}>
               {plan.tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            <select className="input h-7 w-20 px-1 text-xs" disabled={viewOnly} value={g.tableId ?? ''}
+            <select className="input h-7 pointer-coarse:h-10 w-20 px-1 text-xs" disabled={viewOnly} value={g.tableId ?? ''}
               onChange={(e) => { if (!s.assignGuest(g.id, e.target.value || null)) toast('That table is full') }}>
               <option value="">-</option>
               {tables.map((t) => <option key={t.id} value={t.id}>Table {t.number}</option>)}
             </select>
-            {!viewOnly && <button onClick={() => s.removeGuest(g.id)} className="text-muted opacity-0 hover:text-red-600 group-hover:opacity-100"><Trash2 size={14} /></button>}
+            {!viewOnly && <button onClick={() => s.removeGuest(g.id)} className="text-muted opacity-0 hover:text-red-600 group-hover:opacity-100 pointer-coarse:opacity-100"><Trash2 size={14} /></button>}
           </li>
         ))}
         {!guests.length && (
@@ -180,7 +180,7 @@ export function TablesPanel() {
       </ul>
       {plan.guests.length > 0 && (
         <div className="border-t border-bg-2 p-2 text-right">
-          <button className="btn h-7 text-xs" onClick={() => download('guests-seating.csv', guestsToCsv(plan), 'text/csv')}><Download size={13} />Export seating .csv</button>
+          <button className="btn h-7 pointer-coarse:h-10 text-xs" onClick={() => download('guests-seating.csv', guestsToCsv(plan), 'text/csv')}><Download size={13} />Export seating .csv</button>
         </div>
       )}
     </div>

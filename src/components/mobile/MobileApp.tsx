@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Map as MapIcon, Armchair, Users, Info, Eye } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { isTableKind } from '../../lib/catalog'
+import { requestFocus } from '../../lib/canvas'
 import { MobileMap } from './MobileMap'
+import { MobileTables } from './MobileTables'
+import { MobileGuests } from './MobileGuests'
+import { MobileDetails } from './MobileDetails'
 
 type Tab = 'map' | 'tables' | 'guests' | 'details'
 
@@ -13,11 +17,30 @@ const TABS: { id: Tab; label: string; icon: typeof MapIcon }[] = [
   { id: 'details', label: 'Details', icon: Info },
 ]
 
-/** Phone layout: review the plan, tables and guests. Editing stays on desktop. */
+/** Phone layout: review the plan, tables and guests, and check guests in. Editing stays on desktop. */
 export function MobileApp() {
   const plan = usePlanStore((s) => s.plan)
   const viewOnly = usePlanStore((s) => s.viewOnly)
   const [tab, setTab] = useState<Tab>('map')
+  const [foundGuest, setFoundGuest] = useState<string | null>(null)
+  const focusId = useRef<string | null>(null)
+
+  /** "Show on map" from another tab: select it, switch tabs, then center it once the map is visible again. */
+  const showOnMap = (id: string, guestId: string | null = null) => {
+    const e = plan.elements.find((x) => x.id === id)
+    if (!e) return
+    usePlanStore.getState().set({ selection: [id], highlightTable: isTableKind(e.kind) ? id : null })
+    setFoundGuest(guestId)
+    focusId.current = id
+    setTab('map')
+  }
+
+  useEffect(() => {
+    if (tab !== 'map' || !focusId.current) return
+    const e = usePlanStore.getState().plan.elements.find((x) => x.id === focusId.current)
+    focusId.current = null
+    if (e) requestFocus({ x: e.x, y: e.y, zoom: 28 })
+  }, [tab])
 
   return (
     <div className="flex h-full flex-col bg-white">
@@ -31,7 +54,13 @@ export function MobileApp() {
       </header>
 
       <main className="relative min-h-0 flex-1">
-        {tab === 'map' ? <MobileMap /> : <ComingNext tab={tab} />}
+        {/* The map stays mounted (hidden) on other tabs: zoom is kept and PDF export always has a canvas */}
+        <div className={tab === 'map' ? 'absolute inset-0' : 'hidden'}>
+          <MobileMap foundGuest={foundGuest} setFoundGuest={setFoundGuest} />
+        </div>
+        {tab === 'tables' && <MobileTables onShowOnMap={(id) => showOnMap(id)} />}
+        {tab === 'guests' && <MobileGuests onShowOnMap={showOnMap} />}
+        {tab === 'details' && <MobileDetails />}
       </main>
 
       <nav className="flex shrink-0 border-t border-bg-2 bg-white" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
@@ -42,38 +71,6 @@ export function MobileApp() {
           </button>
         ))}
       </nav>
-    </div>
-  )
-}
-
-/** Tables, Guests and Details get their full screens in the next phases (see ROADMAP.md); until then, the headline numbers. */
-function ComingNext({ tab }: { tab: Exclude<Tab, 'map'> }) {
-  const plan = usePlanStore((s) => s.plan)
-  const tables = plan.elements.filter((e) => isTableKind(e.kind))
-  const seats = tables.reduce((n, t) => n + (t.seats ?? 0), 0)
-  const seated = plan.guests.filter((g) => g.tableId).length
-  const checkedIn = plan.guests.filter((g) => g.checkedIn).length
-  const stats: Record<typeof tab, [string, string | number][]> = {
-    tables: [['Tables', tables.length], ['Seats', seats], ['Seated', seated]],
-    guests: [['Guests', plan.guests.length], ['Seated', seated], ['Checked in', checkedIn]],
-    details: [['Tables', tables.length], ['Seats', seats], ['Guests', plan.guests.length]],
-  }
-  const next = {
-    tables: 'The full table list is coming in the next update. Tap a table on the Map to see who sits there.',
-    guests: 'Guest search and check-in are coming in the next update. You can already find a guest from the Map search.',
-    details: 'The event summary, safety status and PDF download are coming soon.',
-  }
-  return (
-    <div className="space-y-4 p-4">
-      <div className="grid grid-cols-3 gap-2">
-        {stats[tab].map(([label, value]) => (
-          <div key={label} className="rounded-xl bg-bg p-3">
-            <div className="text-xs text-muted">{label}</div>
-            <div className="font-mono text-xl font-semibold text-ink">{value}</div>
-          </div>
-        ))}
-      </div>
-      <p className="text-sm text-muted">{next[tab]}</p>
     </div>
   )
 }

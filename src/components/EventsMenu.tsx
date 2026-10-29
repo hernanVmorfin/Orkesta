@@ -14,7 +14,7 @@ export function EventsMenu() {
 
   return (
     <div className="relative">
-      <button className="btn h-7 px-1" title="Your events" onClick={() => setOpen(!open)}><ChevronDown size={16} /></button>
+      <button className="btn h-7 pointer-coarse:h-10 px-1" title="Your events" onClick={() => setOpen(!open)}><ChevronDown size={16} /></button>
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
@@ -29,7 +29,7 @@ export function EventsMenu() {
                       {[e.venue, e.date].filter(Boolean).join(' · ') || 'No venue yet'} · edited {new Date(e.updatedAt).toLocaleDateString()}
                     </div>
                   </button>
-                  <button title="Delete event" className="mr-1 rounded p-1.5 text-muted opacity-0 hover:text-red-600 group-hover:opacity-100"
+                  <button title="Delete event" className="mr-1 rounded p-1.5 text-muted opacity-0 hover:text-red-600 group-hover:opacity-100 pointer-coarse:opacity-100"
                     onClick={() => { if (confirm(`Delete "${e.name || 'Untitled event'}"? It will be removed from this browser.`)) act(() => s.deleteEvent(e.id)) }}>
                     <Trash2 size={14} />
                   </button>

@@ -14,7 +14,7 @@ export function ShareDialog({ onClose }: { onClose: () => void }) {
   }
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40" onClick={onClose}>
-      <div className="w-[520px] rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="mx-4 w-full max-w-[520px] rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
           <div className="eyebrow">Vendor collaboration</div>
           <button onClick={onClose} className="text-muted hover:text-ink"><X size={18} /></button>

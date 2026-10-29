@@ -6,12 +6,15 @@ import { RightPanel } from './components/RightPanel'
 import { MobileApp } from './components/mobile/MobileApp'
 import { usePlanStore } from './store/usePlanStore'
 import { requestFit } from './lib/canvas'
-import { MOBILE_QUERY, useIsMobile } from './lib/useMediaQuery'
+import { MOBILE_QUERY, useIsMobile, useIsWide } from './lib/useMediaQuery'
 
 export default function App() {
   const viewOnly = usePlanStore((s) => s.viewOnly)
   const hydrated = usePlanStore((s) => s.hydrated)
+  const showLibrary = usePlanStore((s) => s.showLibrary)
+  const showPanel = usePlanStore((s) => s.showPanel)
   const isMobile = useIsMobile()
+  const wide = useIsWide()
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => { void usePlanStore.getState().hydrate() }, [])
@@ -68,10 +71,15 @@ export default function App() {
       {isMobile ? <MobileApp /> : (
         <div className="flex h-full flex-col">
           <TopBar />
-          <div className="flex min-h-0 flex-1">
-            {!viewOnly && <Library />}
+          {/* Below 1280 px the side panels slide over the plan instead of squeezing it */}
+          <div className="relative flex min-h-0 flex-1">
+            {!viewOnly && (wide || showLibrary) && (
+              <div className={wide ? 'contents' : 'absolute inset-y-0 left-0 z-30 flex shadow-xl'}><Library /></div>
+            )}
             <main className="min-w-0 flex-1"><FloorCanvas /></main>
-            <RightPanel />
+            {(wide || showPanel) && (
+              <div className={wide ? 'contents' : 'absolute inset-y-0 right-0 z-30 flex shadow-xl'}><RightPanel /></div>
+            )}
           </div>
         </div>
       )}

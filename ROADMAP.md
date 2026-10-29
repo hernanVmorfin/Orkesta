@@ -250,8 +250,51 @@ OnePlan is outdoor site planning with paywalls: Free allows 25 objects; Pro is $
 | Phase | Scope | Status |
 |---|---|---|
 | M1 | Mobile shell with bottom tabs (Map, Tables, Guests, Details). Map: read-only plan and satellite, pinch-to-zoom (also on desktop touch screens), drag to pan, tap a table or object for a details sheet, guest/table search that centers the map, zoom/fit/satellite buttons (44 px). | **Done** on `feature/mobile-companion` |
-| M2 | Tables tab (fill bars, tag filter) and Guests tab (search, filters, check-in toggle), with "show on map" from either | Next |
-| M3 | Details tab (event summary, aisle-check status, PDF download, share link), event switcher on your own phone | |
-| M4 | Tablets: collapsible library and panels, a share dialog that fits, visible delete actions, tap-to-seat instead of drag-and-drop, 44 px targets in the editor | |
+| M2 | Tables tab (fill bars, tag filter) and Guests tab (search, filters, check-in toggle), with "show on map" from either | **Done** |
+| M3 | Details tab (event summary, aisle-check status, PDF download, share link), event switcher on your own phone | **Done** |
+| M4 | Tablets: collapsible library and panels, a share dialog that fits, visible delete actions, tap-to-seat instead of drag-and-drop, 44 px targets in the editor | **Done**. Below 1280 px the library and panel are drawers and view toggles fold into a menu. Touch screens get 40 px controls and always-visible delete buttons. Tap-to-seat already existed: the table picker in each guest row and in the Inspector. |
 
 **Still to test on real devices:** iOS Safari and Android Chrome. Pinch and the safe areas were only checked in an emulated 375 × 812 viewport, with synthetic touch events. This needs the app hosted over HTTPS.
+
+---
+
+## 11. Build queue before the first deploy (added 2026-10-29)
+
+The first deploy waits until the mobile companion (section 10, done) and both items below are built.
+
+You're setting up the cloud database yourself. The app builds against a config/env interface (a backend adapter configured with `VITE_*` variables), and nothing here creates accounts or infrastructure. Connection details get requested when the backend wiring starts. This replaces local-only storage only for shared event data; your own drafts can stay in IndexedDB.
+
+### Q1. Users page, per event
+
+- **Invites:** invite people to an event by email or by a link. Pending invites can be resent or revoked.
+- **Roles:** each person gets a role per event:
+  - **Admin:** can edit the plan, manage people and send messages.
+  - **Staff:** can view the plan and guests, check guests in, and receive and reply to messages.
+  - A person can be Admin on one event, Staff on another, and nothing on a third.
+- **Changes:** change a person's role, or remove them. Removing someone takes effect on their next sync.
+- **Where:** a "People" tab in the desktop right panel, and a list in the mobile Details tab.
+- **Data model (sketch):**
+  - `event_members (event_id, user_id, role, invited_by, created_at)`
+  - `event_invites (event_id, email | token, role, expires_at)`
+  - Access rules are enforced in the database, not just in the UI.
+- **Open questions:**
+  - Sign-in method (email magic link, Google, or both).
+  - Whether Staff can see guest emails and dietary notes (today, view-only links never carry them).
+
+### Q2. Staff messaging (builds on Q1)
+
+- **Broadcasts:** admins send a message to all staff of an event, or to a group (security, catering, stewards…). Groups could start from the Workforce roles in the library.
+- **Message options:** each message has a normal or **urgent** priority, and an optional **pinned map location** that opens the plan at that spot.
+- **For staff:** a new mobile **Messages** tab, alongside Map, Tables, Guests and Details. Staff can send short replies.
+- **For admins:** read receipts per message ("12 of 18 read"), plus a desktop panel to compose and read messages.
+- **Delivery:** live in the app (realtime subscription) while it's open. **Web push for urgent messages comes later.** On iPhone, push only works once the web app is added to the home screen (iOS 16.4+).
+- **Data model (sketch):**
+  - `messages (event_id, sender_id, audience: all | group, group_id, priority, body, pin_x, pin_y, created_at)`
+  - `message_reads (message_id, user_id, read_at)`
+  - `message_replies (message_id, user_id, body, created_at)`
+- **Open questions:**
+  - Message retention after the event.
+  - Whether replies go to all admins or only the sender.
+  - Group membership (assigned per person on the users page, or chosen by staff).
+
+**Order:** Q1, then Q2, then deploy, then real-device testing (section 10) on the hosted HTTPS build.

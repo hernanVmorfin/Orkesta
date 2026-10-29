@@ -33,6 +33,9 @@ interface State {
   showSatellite: boolean
   showClearance: boolean
   showLabels: boolean
+  /** Below 1280 px the library and right panel are slide-over drawers; these open them. */
+  showLibrary: boolean
+  showPanel: boolean
   viewOnly: boolean
   measure: { a: Pt; b: Pt } | null
   rightTab: RightTab
@@ -112,6 +115,8 @@ export const usePlanStore = create<State>((set, get) => ({
   showSatellite: true,
   showClearance: true,
   showLabels: true,
+  showLibrary: false,
+  showPanel: false,
   viewOnly: init.viewOnly,
   measure: null,
   rightTab: 'tables',

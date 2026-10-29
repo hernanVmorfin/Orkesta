@@ -4,6 +4,7 @@ import { LIBRARY_GROUPS } from '../lib/catalog'
 import { ICONS } from '../lib/icons'
 import type { CatalogItem } from '../types'
 import { usePlanStore } from '../store/usePlanStore'
+import { useIsWide } from '../lib/useMediaQuery'
 
 function Thumb({ item }: { item: CatalogItem }) {
   const Icon = item.icon ? ICONS[item.icon] : undefined
@@ -20,6 +21,7 @@ export function Library() {
   const [closed, setClosed] = useState<Record<string, boolean>>({})
   const placing = usePlanStore((s) => s.placing)
   const set = usePlanStore((s) => s.set)
+  const wide = useIsWide()
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-bg-2 bg-white">
@@ -47,7 +49,8 @@ export function Library() {
                   {items.map((i) => (
                     <button key={i.kind} draggable
                       onDragStart={(e) => e.dataTransfer.setData('application/x-kind', i.kind)}
-                      onClick={() => set({ placing: placing === i.kind ? null : i.kind, tool: 'select' })}
+                      // As a drawer (below 1280 px) the library gets out of the way so the plan can be tapped
+                      onClick={() => set({ placing: placing === i.kind ? null : i.kind, tool: 'select', ...(wide ? {} : { showLibrary: false }) })}
                       title={`${i.name} · ${i.w} × ${i.h} m`}
                       className={`flex h-[68px] flex-col items-center justify-center gap-1 rounded-lg border text-center text-[10px] leading-tight transition ${placing === i.kind ? 'border-accent bg-accent/10' : 'border-bg-2 hover:border-accent/50 hover:bg-bg'}`}>
                       <span className="grid h-8 place-items-center"><Thumb item={i} /></span>

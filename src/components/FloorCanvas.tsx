@@ -32,11 +32,18 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
   const [cursor, setCursor] = useState<Pt | null>(null)
   const [marquee, setMarquee] = useState<{ a: Pt; b: Pt } | null>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
+  // A fit asked for while the canvas was hidden (phone tabs) runs once it has a size again
+  const pendingFit = useRef(false)
+  const fitRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     const el = svgRef.current
     if (!el) return
-    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }))
+    const ro = new ResizeObserver(([e]) => {
+      const { width, height } = e.contentRect
+      setSize({ w: width, h: height })
+      if (pendingFit.current && width && height) fitRef.current()
+    })
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
@@ -60,9 +67,12 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
     const el = svgRef.current
     if (!el) return
     const { width, height } = el.getBoundingClientRect()
+    pendingFit.current = !width || !height
+    if (pendingFit.current) return
     const z = Math.min(width / plan.widthM, height / plan.heightM) * 0.94
     s.set({ zoom: z, pan: { x: (width - plan.widthM * z) / 2, y: (height - plan.heightM * z) / 2 } })
   }
+  fitRef.current = fit
 
   useEffect(() => {
     canvasRef.current = svgRef.current
