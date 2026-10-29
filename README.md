@@ -14,7 +14,8 @@ npm run build    # production build in dist/
 - Satellite view (Venue tab): search an address or paste `lat, lng`, then drag and rotate the satellite to line it up with the venue. Imagery stays sharp as you zoom, shows in view-only links, and is included (with attribution) in PNG and PDF exports.
 - Object library: seating, staging and AV, catering, safety, security, workforce, wayfinding and branding, decor.
 - Move, rotate, align, distribute, duplicate, lock, undo/redo, snap, measure, box select.
-- Tables & guests: tags, CSV import/export (`name,company,group,email,dietary,table`), drag guests onto tables, auto-seat, check-in.
+- Tables & guests: tags, CSV import/export (`name,company,group,email,dietary,table,tag`), drag guests onto tables, check-in.
+- Auto-seat (Auto button): keeps groups and companies together, seats tagged guests (VIP, Sponsor…) only at tables with the same tag (overflowing to General tables), and splits groups too big for one table across neighbouring tables. Choose "fill tables in order" or "spread evenly", and optionally re-seat everyone (asks first, undoable). Guests already seated by hand stay put otherwise.
 - Aisle clearance checks (default 1.2 m, editable in Venue).
 - Exports: A3 PDF with iNBest title block, PNG, seating CSV, project JSON.
 - Share links (view-only or editable copy) encoded in the URL. View-only links leave out the guest list unless you choose to show names; emails and dietary notes are never included. Opening an editable copy adds it as a new event.
@@ -34,6 +35,7 @@ src/
   lib/db.ts                 IndexedDB event storage
   lib/canvas.ts             live SVG ref, fit request
   lib/geo.ts                satellite tiles, geo anchor math, place search
+  lib/seating.ts            auto-seat algorithm
   store/usePlanStore.ts     Zustand store, undo/redo, events, autosave
   components/               TopBar, EventsMenu, Library, FloorCanvas, ElementShape, RightPanel,
                             Inspector, TablesPanel, LayersPanel, VenuePanel, SatelliteSection, ShareDialog

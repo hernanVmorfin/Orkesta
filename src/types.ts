@@ -48,6 +48,8 @@ export interface Guest {
   dietary?: string
   tableId?: string | null
   checkedIn?: boolean
+  /** table tag id (VIP, Sponsor…); auto-seat puts the guest at tables with the same tag */
+  tag?: string
 }
 
 export interface TableTag { id: string; name: string; color: string }

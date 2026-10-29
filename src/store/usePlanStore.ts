@@ -6,6 +6,7 @@ import { blankPlan } from '../data/blankPlan'
 import { readShared } from '../lib/share'
 import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
+import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seating'
 
 /** 'geo' drags the satellite under the plan to line it up with the venue. */
 export type Tool = 'select' | 'measure' | 'geo'
@@ -66,7 +67,7 @@ interface State {
   updateGuest: (id: string, patch: Partial<Guest>) => void
   removeGuest: (id: string) => void
   assignGuest: (guestId: string, tableId: string | null) => boolean
-  autoAssign: () => number
+  autoAssign: (opts: SeatingOptions) => SeatingSummary
 }
 
 const touch = (p: Plan): Plan => ({ ...p, updatedAt: Date.now() })
@@ -260,33 +261,10 @@ export const usePlanStore = create<State>((set, get) => ({
     get().updateGuest(guestId, { tableId })
     return true
   },
-  /** Greedy fill: keeps guests of the same group together, fills lowest table numbers first. */
-  autoAssign: () => {
-    const { plan } = get()
-    const tables = plan.elements.filter((e) => isTableKind(e.kind)).sort((a, b) => (a.number ?? 0) - (b.number ?? 0))
-    const free = new Map(tables.map((t) => [t.id, (t.seats ?? 0) - seatsUsed(plan, t.id)]))
-    const pending = plan.guests.filter((g) => !g.tableId)
-    const groups = new Map<string, Guest[]>()
-    pending.forEach((g) => {
-      const k = g.group || g.company || g.id
-      groups.set(k, [...(groups.get(k) ?? []), g])
-    })
-    const assign = new Map<string, string>()
-    ;[...groups.values()].sort((a, b) => b.length - a.length).forEach((grp) => {
-      let rest = [...grp]
-      // try a table that fits the whole group, otherwise spill across tables
-      const fit = tables.find((t) => (free.get(t.id) ?? 0) >= rest.length)
-      const order = fit ? [fit, ...tables] : tables
-      for (const t of order) {
-        while (rest.length && (free.get(t.id) ?? 0) > 0) {
-          assign.set(rest.shift()!.id, t.id)
-          free.set(t.id, (free.get(t.id) ?? 0) - 1)
-        }
-        if (!rest.length) break
-      }
-    })
-    get().mutate((p) => ({ ...p, guests: p.guests.map((g) => (assign.has(g.id) ? { ...g, tableId: assign.get(g.id) } : g)) }))
-    return assign.size
+  autoAssign: (opts) => {
+    const { assign, ...summary } = autoSeat(get().plan, opts)
+    get().mutate((p) => ({ ...p, guests: p.guests.map((g) => (assign.has(g.id) ? { ...g, tableId: assign.get(g.id) ?? null } : g)) }))
+    return summary
   },
 }))
 

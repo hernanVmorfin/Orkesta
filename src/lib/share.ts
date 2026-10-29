@@ -5,7 +5,7 @@ import type { Guest, Plan } from '../types'
 function sharedGuests(plan: Plan, viewOnly: boolean, guestNames: boolean): Guest[] {
   if (!viewOnly) return plan.guests
   if (!guestNames) return []
-  return plan.guests.map(({ id, name, company, group, tableId, checkedIn }) => ({ id, name, company, group, tableId, checkedIn }))
+  return plan.guests.map(({ id, name, company, group, tableId, checkedIn, tag }) => ({ id, name, company, group, tableId, checkedIn, tag }))
 }
 
 /** Encodes a plan into a URL hash. Uploaded (data:) basemaps are dropped to keep links short. */

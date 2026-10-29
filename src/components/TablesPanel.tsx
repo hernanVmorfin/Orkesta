@@ -3,6 +3,7 @@ import { Upload, Download, Wand2, UserPlus, Trash2, CheckCircle2, Circle, GripVe
 import { usePlanStore } from '../store/usePlanStore'
 import { isTableKind } from '../lib/catalog'
 import { CSV_TEMPLATE, download, guestsToCsv, parseGuestsCsv } from '../lib/csv'
+import type { FillMode } from '../lib/seating'
 
 type Filter = 'all' | 'unassigned' | 'assigned'
 
@@ -13,6 +14,9 @@ export function TablesPanel() {
   const [filter, setFilter] = useState<Filter>('all')
   const [name, setName] = useState('')
   const [company, setCompany] = useState('')
+  const [autoOpen, setAutoOpen] = useState(false)
+  const [mode, setMode] = useState<FillMode>('order')
+  const [reseatAll, setReseatAll] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const tables = useMemo(
@@ -40,6 +44,16 @@ export function TablesPanel() {
     const list = parseGuestsCsv(await f.text(), plan)
     s.addGuests(list)
     toast(`Imported ${list.length} guests`)
+  }
+
+  const runAuto = () => {
+    if (reseatAll && assigned > 0 && !confirm(`Re-seat all ${plan.guests.length} guests? Current seating will be replaced (you can undo).`)) return
+    const r = s.autoAssign({ mode, reseatAll })
+    let msg = `Seated ${r.seated} ${r.seated === 1 ? 'guest' : 'guests'}`
+    if (r.unseated) msg += ` · ${r.unseated} still need a seat${r.reservedFree ? ` (${r.reservedFree} free seats are at tagged tables)` : ''}`
+    toast(msg)
+    setAutoOpen(false)
+    setReseatAll(false) // never carry a destructive choice into the next run
   }
 
   return (
@@ -88,11 +102,35 @@ export function TablesPanel() {
             <div className="flex gap-1">
               <button className="btn h-7 px-2 text-xs" onClick={() => fileRef.current?.click()} title="Import CSV: name, company, group, email, dietary, table"><Upload size={13} />CSV</button>
               <button className="btn h-7 px-2 text-xs" onClick={() => download('guests-template.csv', CSV_TEMPLATE, 'text/csv')} title="Download CSV template"><Download size={13} />Template</button>
-              <button className="btn h-7 px-2 text-xs" onClick={() => toast(`Seated ${s.autoAssign()} guests`)} title="Auto-seat unassigned guests, keeping groups together"><Wand2 size={13} />Auto</button>
+              <button className={`btn h-7 px-2 text-xs ${autoOpen ? 'btn-ghost-active' : ''}`} onClick={() => setAutoOpen(!autoOpen)} title="Auto-seat guests"><Wand2 size={13} />Auto</button>
             </div>
           )}
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = '' }} />
         </div>
+        {autoOpen && !viewOnly && (
+          <div className="space-y-2 rounded-lg bg-bg p-3 text-xs">
+            <div className="font-semibold text-ink-2">Auto-seat</div>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="fill-mode" className="accent-[#1ea7e8]" checked={mode === 'order'} onChange={() => setMode('order')} />
+              Fill tables in order <span className="text-muted">(table 1 first)</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="fill-mode" className="accent-[#1ea7e8]" checked={mode === 'even'} onChange={() => setMode('even')} />
+              Spread evenly across tables
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className="accent-[#1ea7e8]" checked={reseatAll} onChange={(e) => setReseatAll(e.target.checked)} />
+              Re-seat everyone <span className="text-muted">(replaces current seating)</span>
+            </label>
+            <p className="text-[11px] leading-snug text-muted">
+              Keeps groups and companies together, seats tagged guests (VIP, Sponsor…) at tables with the same tag, and splits big groups across neighbouring tables.
+            </p>
+            <div className="flex justify-end gap-1">
+              <button className="btn h-7 text-xs" onClick={() => setAutoOpen(false)}>Cancel</button>
+              <button className="btn btn-primary h-7 text-xs" onClick={runAuto}><Wand2 size={13} />Seat guests</button>
+            </div>
+          </div>
+        )}
         {!viewOnly && (
           <form className="flex gap-1" onSubmit={(e) => { e.preventDefault(); if (!name.trim()) return; s.addGuests([{ name: name.trim(), company: company.trim() || undefined, tableId: null }]); setName(''); setCompany('') }}>
             <input className="input" placeholder="Guest name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -121,6 +159,11 @@ export function TablesPanel() {
               <div className="truncate text-sm">{g.name}</div>
               {(g.company || g.group) && <div className="truncate text-[11px] text-muted">{[g.company, g.group].filter(Boolean).join(' · ')}</div>}
             </div>
+            <select className="input h-7 w-[76px] px-1 text-xs" title="Guest tag (auto-seat matches it to table tags)" disabled={viewOnly}
+              value={g.tag ?? 'general'} style={{ color: tagById.get(g.tag ?? 'general')?.color }}
+              onChange={(e) => s.updateGuest(g.id, { tag: e.target.value === 'general' ? undefined : e.target.value })}>
+              {plan.tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
             <select className="input h-7 w-20 px-1 text-xs" disabled={viewOnly} value={g.tableId ?? ''}
               onChange={(e) => { if (!s.assignGuest(g.id, e.target.value || null)) toast('That table is full') }}>
               <option value="">-</option>
