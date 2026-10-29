@@ -3,7 +3,8 @@
 # Azure sign-in uses GitHub OIDC with a user-assigned managed identity, so the repo stores no secrets.
 # The IDs below are identifiers, not credentials:
 #   identity  id-orkesta-github-deploy (rg-orkesta-floorplan, subscription "Software Factory 2024")
-#   trusted   only for repo:hernanVmorfin/Orkesta:ref:refs/heads/main
+#   trusted   only for the OIDC subject repo:hernanVmorfin@45769659/Orkesta@1438791138:ref:refs/heads/main
+#             (GitHub now puts owner and repo IDs in the subject; renaming the repo or owner keeps it valid)
 #   rights    Contributor on the Static Web App swa-orkesta-floorplan, nothing else
 # Do not add `environment:` to the job: it changes the OIDC subject and Azure would refuse the login.
 name: Deploy to Azure
