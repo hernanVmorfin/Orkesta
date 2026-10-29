@@ -1,0 +1,63 @@
+# Builds the app and publishes dist/ to Azure Static Web Apps (Free tier) on every push to main.
+#
+# Azure sign-in uses GitHub OIDC with a user-assigned managed identity, so the repo stores no secrets.
+# The IDs below are identifiers, not credentials:
+#   identity  id-orkesta-github-deploy (rg-orkesta-floorplan, subscription "Software Factory 2024")
+#   trusted   only for repo:hernanVmorfin/Orkesta:ref:refs/heads/main
+#   rights    Contributor on the Static Web App swa-orkesta-floorplan, nothing else
+# Do not add `environment:` to the job: it changes the OIDC subject and Azure would refuse the login.
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: true
+
+env:
+  AZURE_CLIENT_ID: d12d0986-d2dc-4de9-8e17-faecf9ccad5c
+  AZURE_TENANT_ID: 261bc682-cd4a-4ee7-8ae4-9e82e1342e72
+  AZURE_SUBSCRIPTION_ID: 9c601a4f-8884-4d37-a62b-c020a841e8f0
+  SWA_NAME: swa-orkesta-floorplan
+  SWA_RESOURCE_GROUP: rg-orkesta-floorplan
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch the Static Web App deployment token
+        run: |
+          token=$(az staticwebapp secrets list --name "$SWA_NAME" --resource-group "$SWA_RESOURCE_GROUP" --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          echo "SWA_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_TOKEN }}
+          action: upload
+          app_location: dist
+          skip_app_build: true
+          skip_api_build: true
