@@ -1,13 +1,18 @@
 import { useState } from 'react'
 import {
   Undo2, Redo2, ZoomIn, ZoomOut, Maximize, MousePointer2, Ruler, Grid3x3, Magnet, Image as ImageIcon,
-  TriangleAlert, Tag, Share2, FileDown, Eye, Pencil,
+  TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff,
 } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
-import { canvasRef, requestFit } from './FloorCanvas'
-import { exportPdf, renderPlanPng } from '../lib/exportPlan'
+import { canvasRef, requestFit } from '../lib/canvas'
 import { download, guestsToCsv } from '../lib/csv'
 import { ShareDialog } from './ShareDialog'
+import { EventsMenu } from './EventsMenu'
+
+// jsPDF and html2canvas are large; load them only when an export runs
+const exporter = () => import('../lib/exportPlan')
+
+const SAVE_LABEL = { saved: 'Autosaved', saving: 'Saving…', error: 'Not saved' }
 
 function Toggle({ on, onClick, title, children }: { on: boolean; onClick: () => void; title: string; children: React.ReactNode }) {
   return <button title={title} onClick={onClick} className={`btn px-2 ${on ? 'btn-ghost-active' : ''}`}>{children}</button>
@@ -43,6 +48,7 @@ export function TopBar() {
           className="block w-60 truncate bg-transparent text-sm font-semibold text-ink outline-none" />
         <div className="truncate text-[11px] text-muted">{s.plan.venue}{s.plan.date ? ` · ${s.plan.date}` : ''}</div>
       </div>
+      {!s.viewOnly && <EventsMenu />}
 
       {!s.viewOnly && (
         <div className="ml-4 flex items-center gap-1">
@@ -71,8 +77,13 @@ export function TopBar() {
       <div className="ml-auto flex items-center gap-2">
         {s.viewOnly ? (
           <span className="flex items-center gap-1 rounded-full bg-bg-2 px-3 py-1 text-xs text-ink-2"><Eye size={14} /> View-only link</span>
+        ) : s.saveState === 'error' ? (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-red-600"
+            title="This browser blocked saving. Export a project file (.json) to keep your work.">
+            <CloudOff size={12} /> {SAVE_LABEL.error}
+          </span>
         ) : (
-          <span className="hidden items-center gap-1 text-[11px] text-muted xl:flex"><Pencil size={12} /> Autosaved</span>
+          <span className="hidden items-center gap-1 text-[11px] text-muted xl:flex"><Pencil size={12} /> {SAVE_LABEL[s.saveState]}</span>
         )}
         <button className="btn" onClick={() => setShare(true)}><Share2 size={16} /> Share</button>
         <div className="relative">
@@ -81,10 +92,10 @@ export function TopBar() {
           </button>
           {menu && (
             <div className="absolute right-0 top-10 z-30 w-60 rounded-lg border border-bg-2 bg-white p-1 text-sm shadow-lg">
-              <MenuItem onClick={() => run(() => exportPdf(canvasRef.current!, s.plan))}>PDF plan · A3 300 dpi</MenuItem>
-              <MenuItem onClick={() => run(() => exportPdf(canvasRef.current!, s.plan, { grid: true, clearance: true }))}>PDF with grid + aisle checks</MenuItem>
+              <MenuItem onClick={() => run(async () => (await exporter()).exportPdf(canvasRef.current!, s.plan))}>PDF plan · A3 300 dpi</MenuItem>
+              <MenuItem onClick={() => run(async () => (await exporter()).exportPdf(canvasRef.current!, s.plan, { grid: true, clearance: true }))}>PDF with grid + aisle checks</MenuItem>
               <MenuItem onClick={() => run(async () => {
-                const { dataUrl } = await renderPlanPng(canvasRef.current!, s.plan, 6000, { grid: false, clearance: false })
+                const { dataUrl } = await (await exporter()).renderPlanPng(canvasRef.current!, s.plan, 6000, { grid: false, clearance: false })
                 const a = document.createElement('a'); a.href = dataUrl; a.download = 'floorplan.png'; a.click()
               })}>PNG image · 6000 px</MenuItem>
               <MenuItem onClick={() => run(() => download('guests-seating.csv', guestsToCsv(s.plan), 'text/csv'))}>Seating list (.csv)</MenuItem>

@@ -1,10 +1,18 @@
 import LZString from 'lz-string'
-import type { Plan } from '../types'
+import type { Guest, Plan } from '../types'
+
+/** Guests a link may carry: view-only links drop the guest list unless names are requested, and never include emails or dietary notes. */
+function sharedGuests(plan: Plan, viewOnly: boolean, guestNames: boolean): Guest[] {
+  if (!viewOnly) return plan.guests
+  if (!guestNames) return []
+  return plan.guests.map(({ id, name, company, group, tableId, checkedIn }) => ({ id, name, company, group, tableId, checkedIn }))
+}
 
 /** Encodes a plan into a URL hash. Uploaded (data:) basemaps are dropped to keep links short. */
-export function shareUrl(plan: Plan, viewOnly: boolean) {
+export function shareUrl(plan: Plan, viewOnly: boolean, guestNames = false) {
   const lean: Plan = {
     ...plan,
+    guests: sharedGuests(plan, viewOnly, guestNames),
     basemap: plan.basemap?.src.startsWith('data:') ? undefined : plan.basemap,
   }
   const data = LZString.compressToEncodedURIComponent(JSON.stringify(lean))

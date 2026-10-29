@@ -4,11 +4,16 @@ import type { Guest, LayerId, LayerState, Plan, PlanElement, Pt } from '../types
 import { CATALOG, isTableKind } from '../lib/catalog'
 import { blankPlan } from '../data/blankPlan'
 import { readShared } from '../lib/share'
+import * as db from '../lib/db'
+import type { EventSummary } from '../lib/db'
 
 export type Tool = 'select' | 'measure'
 export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue'
+export type SaveState = 'saved' | 'saving' | 'error'
 
-const STORAGE_KEY = 'inbest-floorplan:v1'
+/** Pre-IndexedDB single-plan autosave, migrated on first load. */
+const LEGACY_KEY = 'inbest-floorplan:v1'
+const CURRENT_KEY = 'inbest-floorplan:current'
 const HISTORY_LIMIT = 100
 
 interface State {
@@ -29,11 +34,21 @@ interface State {
   measure: { a: Pt; b: Pt } | null
   rightTab: RightTab
   highlightTable: string | null
+  /** False until the current event has been read from IndexedDB. */
+  hydrated: boolean
+  saveState: SaveState
+  events: EventSummary[]
 
   set: (p: Partial<State>) => void
   checkpoint: () => void
   mutate: (fn: (p: Plan) => Plan, record?: boolean) => void
-  loadPlan: (p: Plan) => void
+  hydrate: () => Promise<void>
+  openEvent: (id: string) => Promise<void>
+  newEvent: () => Promise<void>
+  duplicateEvent: () => Promise<void>
+  deleteEvent: (id: string) => Promise<void>
+  /** Adds a plan (JSON file, shared copy) as a new event, so it never overwrites an existing one. */
+  importPlan: (p: Plan) => Promise<void>
   undo: () => void
   redo: () => void
 
@@ -54,17 +69,28 @@ interface State {
 
 const touch = (p: Plan): Plan => ({ ...p, updatedAt: Date.now() })
 
-function initialPlan(): { plan: Plan; viewOnly: boolean } {
-  const shared = readShared()
-  if (shared) return shared
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return { plan: JSON.parse(raw) as Plan, viewOnly: false }
-  } catch { /* storage unavailable */ }
-  return { plan: blankPlan(), viewOnly: false }
+/** View-only links render straight from the URL; everything else waits for `hydrate`. */
+const shared = readShared()
+const init = shared?.viewOnly ? shared : { plan: blankPlan(), viewOnly: false }
+
+const rememberCurrent = (id: string) => {
+  try { localStorage.setItem(CURRENT_KEY, id) } catch { /* storage unavailable */ }
 }
 
-const init = initialPlan()
+/** Moves the old localStorage autosave into IndexedDB once. */
+async function migrateLegacy() {
+  let raw: string | null = null
+  try { raw = localStorage.getItem(LEGACY_KEY) } catch { return }
+  if (!raw) return
+  let plan: Plan
+  try { plan = JSON.parse(raw) as Plan } catch { return }
+  await db.savePlan(plan)
+  rememberCurrent(plan.id)
+  try { localStorage.removeItem(LEGACY_KEY) } catch { /* ignore */ }
+}
+
+const clearHistory = { past: [], future: [], selection: [], highlightTable: null, measure: null }
+let hydrating: Promise<void> | undefined
 
 export const seatsUsed = (plan: Plan, tableId: string) => plan.guests.filter((g) => g.tableId === tableId).length
 
@@ -86,6 +112,9 @@ export const usePlanStore = create<State>((set, get) => ({
   measure: null,
   rightTab: 'tables',
   highlightTable: null,
+  hydrated: init.viewOnly,
+  saveState: 'saved',
+  events: [],
 
   set: (p) => set(p),
   checkpoint: () => set((s) => ({ past: [...s.past.slice(-HISTORY_LIMIT), s.plan], future: [] })),
@@ -93,7 +122,62 @@ export const usePlanStore = create<State>((set, get) => ({
     set((s) => (record
       ? { past: [...s.past.slice(-HISTORY_LIMIT), s.plan], future: [], plan: touch(fn(s.plan)) }
       : { plan: touch(fn(s.plan)) })),
-  loadPlan: (p) => set({ plan: p, past: [], future: [], selection: [] }),
+  hydrate: () => (hydrating ??= (async () => {
+    if (get().hydrated) return
+    let plan: Plan | undefined
+    let events: EventSummary[] = []
+    try {
+      if (shared) {
+        // Editable copy from a link: keep it as its own event and drop the hash so a reload doesn't import it again
+        plan = { ...shared.plan, id: nanoid(10), updatedAt: Date.now() }
+        await db.savePlan(plan)
+        history.replaceState(null, '', window.location.pathname + window.location.search)
+      } else {
+        await migrateLegacy()
+        let id: string | null = null
+        try { id = localStorage.getItem(CURRENT_KEY) } catch { /* storage unavailable */ }
+        plan = id ? await db.getPlan(id) : undefined
+      }
+      events = await db.listEvents()
+      if (!plan && events[0]) plan = await db.getPlan(events[0].id)
+    } catch {
+      set({ saveState: 'error' })
+    }
+    plan ??= blankPlan()
+    rememberCurrent(plan.id)
+    set({ plan, events, hydrated: true, ...clearHistory })
+    navigator.storage?.persist?.().catch(() => {})
+  })()),
+  openEvent: async (id) => {
+    if (id === get().plan.id) return
+    await flushSave()
+    const plan = await db.getPlan(id).catch(() => undefined)
+    if (!plan) return
+    rememberCurrent(id)
+    set({ plan, ...clearHistory })
+  },
+  newEvent: () => get().importPlan(blankPlan()),
+  duplicateEvent: () => {
+    const p = get().plan
+    return get().importPlan({ ...p, name: `${p.name} (copy)` })
+  },
+  deleteEvent: async (id) => {
+    const current = id === get().plan.id
+    if (current) cancelSave()
+    try { await db.deletePlan(id) } catch { set({ saveState: 'error' }); return }
+    set((s) => ({ events: s.events.filter((e) => e.id !== id) }))
+    if (!current) return
+    const next = get().events[0]
+    if (next) await get().openEvent(next.id)
+    else await get().newEvent()
+  },
+  importPlan: async (p) => {
+    await flushSave()
+    const plan = { ...p, id: nanoid(10), updatedAt: Date.now() }
+    rememberCurrent(plan.id)
+    set({ plan, ...clearHistory })
+    await persist(plan)
+  },
   undo: () => set((s) => {
     const prev = s.past[s.past.length - 1]
     if (!prev) return {}
@@ -203,12 +287,38 @@ export const usePlanStore = create<State>((set, get) => ({
   },
 }))
 
-// Autosave (local only; real-time sync is the Phase 2 backend, see PROMPT.md)
+// Autosave to IndexedDB (local only; real-time sync is the Phase 2 backend, see PROMPT.md)
 let t: ReturnType<typeof setTimeout> | undefined
-usePlanStore.subscribe((s, prev) => {
-  if (s.plan === prev.plan || s.viewOnly) return
+let pending: Plan | null = null
+
+async function persist(plan: Plan) {
+  usePlanStore.setState({ saveState: 'saving' })
+  try {
+    await db.savePlan(plan)
+    const sum = db.summarize(plan)
+    usePlanStore.setState((s) => ({ saveState: 'saved', events: [sum, ...s.events.filter((e) => e.id !== sum.id)] }))
+  } catch {
+    usePlanStore.setState({ saveState: 'error' })
+  }
+}
+
+/** Writes any debounced edit now (before switching events). */
+async function flushSave() {
   clearTimeout(t)
-  t = setTimeout(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s.plan)) } catch { /* quota or private mode */ }
-  }, 400)
+  const p = pending
+  pending = null
+  if (p) await persist(p)
+}
+
+function cancelSave() {
+  clearTimeout(t)
+  pending = null
+}
+
+usePlanStore.subscribe((s, prev) => {
+  // Switching events (id change) or finishing hydration loads a plan; it doesn't edit one
+  if (s.plan === prev.plan || s.viewOnly || !prev.hydrated || s.plan.id !== prev.plan.id) return
+  pending = s.plan
+  clearTimeout(t)
+  t = setTimeout(() => { void flushSave() }, 400)
 })

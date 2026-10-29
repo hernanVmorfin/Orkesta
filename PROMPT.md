@@ -34,8 +34,8 @@ Vite + React 19 + TypeScript (strict) + Tailwind CSS v4 (`@tailwindcss/vite`). S
 5. **Seating manager**: table grid with fill bars, table tags (General, VIP, Sponsor, Speaker, Press, Staff) colored on the plan, guest list with search and filters, add guest, **CSV import/export** (name, company, group, email, dietary, table), drag a guest onto a table on the plan or in the grid, capacity enforcement, check-in toggle, auto-seat that keeps groups together.
 6. **Safety checks**: aisle clearance (chair-back to chair-back, table radius + 0.75 m) against a configurable minimum (default 1.2 m), drawn as red dashed lines with the gap in meters, plus a conflict counter.
 7. **Export**: A3 landscape 300 dpi PDF with an iNBest navy title block (event, venue, date, tables/seats, guests seated, scale 1:N, revision, tag legend), optional grid and aisle overlay; 6000 px PNG; seating CSV; project JSON.
-8. **Share**: link that encodes the plan (view-only or editable copy). View-only mode hides the library and disables editing but keeps pan, zoom, layers and export.
-9. **Persistence**: autosave to localStorage (wrapped in try/catch), open/save project JSON, start a new blank plan.
+8. **Share**: link that encodes the plan (view-only or editable copy). View-only mode hides the library and disables editing but keeps pan, zoom, layers and export. View-only links never carry guest emails or dietary notes (guest names only when the sender opts in); an opened editable copy becomes a new event.
+9. **Persistence**: multiple events autosaved to IndexedDB (plans and basemaps), with a visible "Not saved" state on failure; open project JSON as a new event; create, duplicate and delete events.
 
 ## Phase 2 (design for it, do not build yet)
 - Supabase (Postgres + Auth + Realtime) or Liveblocks/Yjs for real-time multi-user rooms, presence cursors, comments pinned to the plan, role-based links (owner, editor, vendor viewer), revision history.

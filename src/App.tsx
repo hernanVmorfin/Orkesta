@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { TopBar } from './components/TopBar'
 import { Library } from './components/Library'
-import { FloorCanvas, requestFit } from './components/FloorCanvas'
+import { FloorCanvas } from './components/FloorCanvas'
 import { RightPanel } from './components/RightPanel'
 import { usePlanStore } from './store/usePlanStore'
+import { requestFit } from './lib/canvas'
 
 export default function App() {
   const viewOnly = usePlanStore((s) => s.viewOnly)
+  const hydrated = usePlanStore((s) => s.hydrated)
   const [toast, setToast] = useState<string | null>(null)
+
+  useEffect(() => { void usePlanStore.getState().hydrate() }, [])
 
   useEffect(() => {
     let t: ReturnType<typeof setTimeout>
@@ -28,12 +32,16 @@ export default function App() {
       const s = usePlanStore.getState()
       const mod = e.metaKey || e.ctrlKey
       if (e.key === 'Escape') s.set({ placing: null, selection: [], measure: null, tool: 'select' })
-      if (e.key === 'f') requestFit()
+      if (!mod && e.key === 'f') requestFit()
       if (s.viewOnly) return
-      if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? s.redo() : s.undo() }
-      else if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); s.redo() }
-      else if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); s.duplicateSelected() }
-      else if (e.key === 'Delete' || e.key === 'Backspace') s.deleteSelected()
+      if (mod) {
+        const k = e.key.toLowerCase()
+        if (k === 'z') { e.preventDefault(); if (e.shiftKey) s.redo(); else s.undo() }
+        else if (k === 'y') { e.preventDefault(); s.redo() }
+        else if (k === 'd') { e.preventDefault(); s.duplicateSelected() }
+        return
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') s.deleteSelected()
       else if (e.key === 'm') s.set({ tool: 'measure', placing: null })
       else if (e.key === 'v') s.set({ tool: 'select', measure: null })
       else if (e.key === 'r' && s.selection.length) s.updateMany((el) => ({ ...el, rotation: (el.rotation + 15) % 360 }), s.selection)
@@ -48,6 +56,8 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  if (!hydrated) return <div className="grid h-full place-items-center text-sm text-muted">Loading your events…</div>
 
   return (
     <div className="flex h-full flex-col">

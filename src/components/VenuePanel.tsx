@@ -1,10 +1,8 @@
 import { useRef, useState } from 'react'
-import { Upload, RotateCcw, FileUp, Ruler } from 'lucide-react'
+import { Upload, Plus, FileUp, Ruler } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
-import { blankPlan } from '../data/blankPlan'
 import { dist } from '../lib/geometry'
 import type { Plan } from '../types'
-import { requestFit } from './FloorCanvas'
 
 export function VenuePanel() {
   const s = usePlanStore()
@@ -96,15 +94,19 @@ export function VenuePanel() {
 
       <section className="space-y-2">
         <div className="eyebrow">Project</div>
-        <button className="btn w-full" onClick={() => jsonRef.current?.click()}><FileUp size={15} />Open project file (.json)</button>
+        <button className="btn w-full" onClick={() => jsonRef.current?.click()}><FileUp size={15} />Open project file as new event (.json)</button>
         <input ref={jsonRef} type="file" accept="application/json,.json" hidden onChange={async (e) => {
           const f = e.target.files?.[0]; e.target.value = ''
           if (!f) return
-          try { s.loadPlan(JSON.parse(await f.text())); setTimeout(requestFit, 0) } catch { alert('Invalid project file') }
+          let p: Plan
+          try { p = JSON.parse(await f.text()) as Plan } catch { alert('Invalid project file'); return }
+          if (!Array.isArray(p?.elements) || !p.layers) { alert('Invalid project file'); return }
+          await s.importPlan(p)
         }} />
-        <button className="btn w-full" onClick={() => { if (confirm('Start a new blank plan? Guests and edits will be lost.')) { s.loadPlan(blankPlan()); setTimeout(requestFit, 0) } }}>
-          <RotateCcw size={15} />New blank plan
+        <button className="btn w-full" onClick={() => void s.newEvent()}>
+          <Plus size={15} />New event
         </button>
+        <p className="text-[11px] text-muted">Events are saved in this browser. Switch between them from the menu next to the event name.</p>
       </section>
     </div>
   )

@@ -6,8 +6,9 @@ import { shareUrl } from '../lib/share'
 export function ShareDialog({ onClose }: { onClose: () => void }) {
   const plan = usePlanStore((s) => s.plan)
   const [viewOnly, setViewOnly] = useState(true)
+  const [guestNames, setGuestNames] = useState(false)
   const [copied, setCopied] = useState(false)
-  const url = useMemo(() => shareUrl(plan, viewOnly), [plan, viewOnly])
+  const url = useMemo(() => shareUrl(plan, viewOnly, guestNames), [plan, viewOnly, guestNames])
   const copy = async () => {
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* ignore */ }
   }
@@ -28,6 +29,19 @@ export function ShareDialog({ onClose }: { onClose: () => void }) {
             </button>
           ))}
         </div>
+        {plan.guests.length > 0 && (viewOnly ? (
+          <label className="mb-3 flex items-start gap-2 rounded-lg bg-bg p-3 text-sm">
+            <input type="checkbox" className="mt-0.5 accent-[#1ea7e8]" checked={guestNames} onChange={(e) => setGuestNames(e.target.checked)} />
+            <span>
+              <span className="font-semibold">Show guest names on tables</span>
+              <span className="block text-xs text-muted">For check-in staff. Emails and dietary notes are never included in view-only links.</span>
+            </span>
+          </label>
+        ) : (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            An editable copy includes the full guest list, with emails and dietary notes. Only send it to people who should see them.
+          </p>
+        ))}
         <div className="flex gap-2">
           <input readOnly value={url} className="input font-mono text-[11px]" onFocus={(e) => e.target.select()} />
           <button onClick={copy} className="btn btn-primary shrink-0">{copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Copied' : 'Copy'}</button>

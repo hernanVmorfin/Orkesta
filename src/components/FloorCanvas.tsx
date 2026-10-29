@@ -3,10 +3,8 @@ import { usePlanStore } from '../store/usePlanStore'
 import { ElementShape } from './ElementShape'
 import { LAYERS, CATALOG, isTableKind } from '../lib/catalog'
 import { clearanceIssues, dist, snap } from '../lib/geometry'
+import { canvasRef } from '../lib/canvas'
 import type { Pt } from '../types'
-
-export const canvasRef: { current: SVGSVGElement | null } = { current: null }
-export const requestFit = () => window.dispatchEvent(new Event('fp:fit'))
 
 type Drag =
   | { t: 'move'; start: Pt; orig: Map<string, Pt>; primary: string; moved: boolean }
@@ -45,7 +43,7 @@ export function FloorCanvas() {
     window.addEventListener('fp:fit', onFit)
     return () => window.removeEventListener('fp:fit', onFit)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan.widthM, plan.heightM])
+  }, [plan.id, plan.widthM, plan.heightM])
 
   // Wheel zoom around cursor (non-passive so we can preventDefault)
   useEffect(() => {

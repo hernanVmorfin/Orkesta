@@ -16,7 +16,8 @@ npm run build    # production build in dist/
 - Tables & guests: tags, CSV import/export (`name,company,group,email,dietary,table`), drag guests onto tables, auto-seat, check-in.
 - Aisle clearance checks (default 1.2 m, editable in Venue).
 - Exports: A3 PDF with iNBest title block, PNG, seating CSV, project JSON.
-- Share links (view-only or editable copy) encoded in the URL.
+- Share links (view-only or editable copy) encoded in the URL. View-only links leave out the guest list unless you choose to show names; emails and dietary notes are never included. Opening an editable copy adds it as a new event.
+- Multiple events saved in the browser (IndexedDB, including uploaded basemaps): switch, create, duplicate and delete from the menu next to the event name. The top bar shows "Not saved" if the browser blocks storage.
 
 Confirm safety marker positions (extinguishers, exits, first aid) with the venue and local civil protection.
 
@@ -27,10 +28,12 @@ src/
   data/blankPlan.ts         default empty plan
   lib/catalog.ts            object library + layers
   lib/geometry.ts           snap, clearance checks
-  lib/exportPlan.ts         PDF / PNG export
+  lib/exportPlan.ts         PDF / PNG export (loaded on demand)
   lib/share.ts, csv.ts      share links, guest CSV
-  store/usePlanStore.ts     Zustand store, undo/redo, autosave
-  components/               TopBar, Library, FloorCanvas, ElementShape, RightPanel,
+  lib/db.ts                 IndexedDB event storage
+  lib/canvas.ts             live SVG ref, fit request
+  store/usePlanStore.ts     Zustand store, undo/redo, events, autosave
+  components/               TopBar, EventsMenu, Library, FloorCanvas, ElementShape, RightPanel,
                             Inspector, TablesPanel, LayersPanel, VenuePanel, ShareDialog
 ```
 
