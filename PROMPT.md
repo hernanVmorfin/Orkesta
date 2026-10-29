@@ -39,7 +39,7 @@ Vite + React 19 + TypeScript (strict) + Tailwind CSS v4 (`@tailwindcss/vite`). S
 
 ## Phase 2 (design for it, do not build yet)
 - Supabase (Postgres + Auth + Realtime) or Liveblocks/Yjs for real-time multi-user rooms, presence cursors, comments pinned to the plan, role-based links (owner, editor, vendor viewer), revision history.
-- Aerial basemaps from map tiles (MapLibre + satellite source) with geo-referenced meters.
+- Aerial basemaps from map tiles with geo-referenced meters. (Built: satellite tiles under the plan with a lat/lng anchor and rotation; see ROADMAP.md section 8.)
 - Per-vendor filtered exports (e.g. only catering layer), QR check-in, seat-level assignment, printable place cards.
 
 ## Acceptance criteria

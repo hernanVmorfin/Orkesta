@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Navigation } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { ElementShape } from './ElementShape'
 import { LAYERS, CATALOG, isTableKind } from '../lib/catalog'
 import { clearanceIssues, dist, snap } from '../lib/geometry'
 import { canvasRef } from '../lib/canvas'
-import type { Pt } from '../types'
+import { SATELLITE_ATTRIBUTION, planToLatLng, tileZoom, tilesFor } from '../lib/geo'
+import type { GeoAnchor, Pt } from '../types'
 
 type Drag =
   | { t: 'move'; start: Pt; orig: Map<string, Pt>; primary: string; moved: boolean }
@@ -12,6 +14,7 @@ type Drag =
   | { t: 'rotate'; id: string; c: Pt; moved: boolean }
   | { t: 'measure'; a: Pt }
   | { t: 'marquee'; a: Pt; additive: boolean }
+  | { t: 'geo'; start: Pt; geo0: GeoAnchor; moved: boolean }
 
 const LAYER_ORDER = Object.fromEntries(LAYERS.map((l, i) => [l.id, i]))
 
@@ -22,6 +25,25 @@ export function FloorCanvas() {
   const drag = useRef<Drag | null>(null)
   const [cursor, setCursor] = useState<Pt | null>(null)
   const [marquee, setMarquee] = useState<{ a: Pt; b: Pt } | null>(null)
+  const [size, setSize] = useState({ w: 0, h: 0 })
+
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Satellite tiles for the visible area, at the zoom that matches screen resolution
+  const geo = plan.geo
+  const satellite = geo && s.showSatellite ? geo : null
+  const tiles = useMemo(() => {
+    if (!satellite || !size.w) return []
+    const corners = [[0, 0], [size.w, 0], [0, size.h], [size.w, size.h]]
+      .map(([cx, cy]) => ({ x: (cx - pan.x) / zoom, y: (cy - pan.y) / zoom }))
+    return tilesFor(satellite, corners, tileZoom(satellite.lat, zoom * Math.min(2, window.devicePixelRatio || 1)))
+  }, [satellite, size, pan, zoom])
 
   const toWorld = (cx: number, cy: number): Pt => {
     const r = svgRef.current!.getBoundingClientRect()
@@ -97,6 +119,10 @@ export function FloorCanvas() {
       if (!ev.shiftKey) s.set({ placing: null })
       return
     }
+    if (s.tool === 'geo' && geo && !viewOnly) {
+      drag.current = { t: 'geo', start: w, geo0: geo, moved: false }
+      return
+    }
     if (s.tool === 'measure') {
       drag.current = { t: 'measure', a: w }
       s.set({ measure: { a: w, b: w } })
@@ -145,6 +171,11 @@ export function FloorCanvas() {
       let a = (Math.atan2(w.y - d.c.y, w.x - d.c.x) * 180) / Math.PI + 90
       a = ev.shiftKey ? a : Math.round(a / 15) * 15
       s.updateElement(d.id, { rotation: ((a % 360) + 360) % 360 }, false)
+    } else if (d.t === 'geo') {
+      if (!d.moved) { s.checkpoint(); d.moved = true }
+      // The world point that was under plan point -delta now sits at the plan origin
+      const at = planToLatLng(d.geo0, { x: d.start.x - w.x, y: d.start.y - w.y })
+      s.mutate((p) => ({ ...p, geo: { ...d.geo0, lat: at.lat, lng: at.lng } }), false)
     } else if (d.t === 'measure') {
       s.set({ measure: { a: d.a, b: w } })
     } else if (d.t === 'marquee') {
@@ -190,7 +221,7 @@ export function FloorCanvas() {
       <svg
         ref={svgRef}
         className="h-full w-full touch-none select-none"
-        style={{ cursor: s.placing ? 'copy' : s.tool === 'measure' ? 'crosshair' : 'grab' }}
+        style={{ cursor: s.placing ? 'copy' : s.tool === 'measure' ? 'crosshair' : s.tool === 'geo' ? 'move' : 'grab' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -200,6 +231,14 @@ export function FloorCanvas() {
       >
         <g id="world" transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
           <rect id="venue-bg" width={plan.widthM} height={plan.heightM} fill="#ffffff" />
+          {satellite && (
+            <g className="satellite" transform={`rotate(${satellite.rotation})`} opacity={satellite.opacity} pointerEvents="none">
+              {/* one tile pixel of overlap hides seams between tiles */}
+              {tiles.map((t) => (
+                <image key={t.key} href={t.url} x={t.x} y={t.y} width={t.size * 1.004} height={t.size * 1.004} preserveAspectRatio="none" />
+              ))}
+            </g>
+          )}
           {bm && s.showBasemap && (
             <image id="basemap" href={bm.src} x={bm.x} y={bm.y} width={bm.widthM} height={bm.widthM / bm.aspect}
               opacity={bm.opacity} preserveAspectRatio="none" />
@@ -273,6 +312,22 @@ export function FloorCanvas() {
         <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
           Click to place <b>{CATALOG[s.placing]?.name}</b> · Shift+click to place several · Esc to cancel
         </div>
+      )}
+      {s.tool === 'geo' && (
+        <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
+          Drag to move the satellite under your venue · rotate it in the Venue tab · Esc when done
+        </div>
+      )}
+      {satellite && (
+        <>
+          <div className="pointer-events-none absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-white/90 shadow-sm" title="North">
+            <div className="flex flex-col items-center" style={{ transform: `rotate(${satellite.rotation}deg)` }}>
+              <Navigation size={14} className="fill-red-600 text-red-600" />
+              <span className="font-mono text-[9px] font-semibold leading-none text-ink">N</span>
+            </div>
+          </div>
+          <div className="pointer-events-none absolute bottom-10 right-3 rounded bg-white/80 px-1.5 py-0.5 text-[10px] text-muted">{SATELLITE_ATTRIBUTION}</div>
+        </>
       )}
       {issues.length > 0 && (
         <div className="absolute left-3 top-3 rounded-md border border-red-200 bg-white/95 px-3 py-1.5 text-xs text-red-700 shadow-sm">

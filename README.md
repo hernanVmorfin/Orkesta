@@ -11,6 +11,7 @@ npm run build    # production build in dist/
 
 ## What's in the prototype
 - Starts from a blank 30 × 20 m plan (`src/data/blankPlan.ts`); upload a venue drawing or aerial image as a calibrated basemap.
+- Satellite view (Venue tab): search an address or paste `lat, lng`, then drag and rotate the satellite to line it up with the venue. Imagery stays sharp as you zoom, shows in view-only links, and is included (with attribution) in PNG and PDF exports.
 - Object library: seating, staging and AV, catering, safety, security, workforce, wayfinding and branding, decor.
 - Move, rotate, align, distribute, duplicate, lock, undo/redo, snap, measure, box select.
 - Tables & guests: tags, CSV import/export (`name,company,group,email,dietary,table`), drag guests onto tables, auto-seat, check-in.
@@ -32,13 +33,22 @@ src/
   lib/share.ts, csv.ts      share links, guest CSV
   lib/db.ts                 IndexedDB event storage
   lib/canvas.ts             live SVG ref, fit request
+  lib/geo.ts                satellite tiles, geo anchor math, place search
   store/usePlanStore.ts     Zustand store, undo/redo, events, autosave
   components/               TopBar, EventsMenu, Library, FloorCanvas, ElementShape, RightPanel,
-                            Inspector, TablesPanel, LayersPanel, VenuePanel, ShareDialog
+                            Inspector, TablesPanel, LayersPanel, VenuePanel, SatelliteSection, ShareDialog
 ```
 
 ## Shortcuts
 Del delete · Ctrl+D duplicate · Ctrl+Z / Ctrl+Shift+Z undo/redo · arrows nudge 0.1 m (Shift 1 m) · R rotate 15° · M measure · V select · F fit · Shift+drag box select · Alt+drag pan · Esc cancel
+
+## Satellite imagery and place search
+Defaults need no keys: Esri World Imagery tiles and OpenStreetMap Nominatim search. Both are fine for a prototype. For production, use a keyed imagery provider (Esri Location Platform, MapTiler, Mapbox or Google Map Tiles) and a geocoder you're licensed for:
+```bash
+VITE_SATELLITE_TILES="https://example.com/tiles/{z}/{x}/{y}.jpg?key=..."
+VITE_SATELLITE_ATTRIBUTION="Imagery © Your provider"
+```
+Nominatim allows about 1 search per second and no search-as-you-type; the app only searches on submit.
 
 ## Phase 2
 Real-time collaboration (Supabase Realtime or Liveblocks), vendor roles, comments, revision history, geo-referenced aerial basemaps. See `PROMPT.md`.

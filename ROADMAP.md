@@ -207,6 +207,17 @@ OnePlan's core is a satellite map with geo-referenced objects. It's costly to bu
 
 A cheaper option is "Place aerial image by address": fetch a static satellite image for a location, then use the existing calibration. That covers most outdoor needs.
 
+**Status (2026-10-29): a satellite view is built, without MapLibre.**
+- **How it works:** live Esri World Imagery tiles are drawn inside the existing meter-based SVG canvas, under the plan, choosing the tile zoom from the current px/m. A `GeoAnchor` (lat/lng of the plan origin, plus rotation) pins the plan to the world.
+- **Placing it:** search an address (Nominatim) or paste `lat, lng`. You can drag the satellite to align it, rotate it around the venue centre, set its opacity, or turn it off. A north arrow and the imagery credit show on the canvas.
+- **Everywhere else:** it shows in view-only links, and exports re-fetch tiles for the whole venue at export resolution, with the credit stamped on.
+
+Still open:
+- a keyed imagery provider and geocoder for production;
+- zoom beyond tile level 19, which gets blurry when zoomed in close (Google/Mapbox go to about 21–22);
+- GeoJSON import/export;
+- lat/lng readout per object.
+
 ---
 
 ## 9. Suggested order (next 5 pull requests)

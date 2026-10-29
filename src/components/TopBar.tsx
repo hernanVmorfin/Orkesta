@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Undo2, Redo2, ZoomIn, ZoomOut, Maximize, MousePointer2, Ruler, Grid3x3, Magnet, Image as ImageIcon,
-  TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff,
+  TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff, Satellite,
 } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { canvasRef, requestFit } from '../lib/canvas'
@@ -69,6 +69,7 @@ export function TopBar() {
         <div className="mx-1 h-6 w-px bg-bg-2" />
         <Toggle title="Grid (1 m / 5 m)" on={s.showGrid} onClick={() => s.set({ showGrid: !s.showGrid })}><Grid3x3 size={16} /></Toggle>
         {!s.viewOnly && <Toggle title="Snap to 0.25 m" on={s.snapOn} onClick={() => s.set({ snapOn: !s.snapOn })}><Magnet size={16} /></Toggle>}
+        {s.plan.geo && <Toggle title="Satellite view" on={s.showSatellite} onClick={() => s.set({ showSatellite: !s.showSatellite })}><Satellite size={16} /></Toggle>}
         <Toggle title="Venue basemap" on={s.showBasemap} onClick={() => s.set({ showBasemap: !s.showBasemap })}><ImageIcon size={16} /></Toggle>
         <Toggle title="Aisle clearance check" on={s.showClearance} onClick={() => s.set({ showClearance: !s.showClearance })}><TriangleAlert size={16} /></Toggle>
         <Toggle title="Labels" on={s.showLabels} onClick={() => s.set({ showLabels: !s.showLabels })}><Tag size={16} /></Toggle>

@@ -3,6 +3,7 @@ import { Upload, Plus, FileUp, Ruler } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { dist } from '../lib/geometry'
 import type { Plan } from '../types'
+import { SatelliteSection } from './SatelliteSection'
 
 export function VenuePanel() {
   const s = usePlanStore()
@@ -59,6 +60,8 @@ export function VenuePanel() {
         </div>
         <p className="text-[11px] text-muted">Aisle check measures chair-back to chair-back (table + 0.75 m chair zone). Confirm the minimum with local civil protection rules.</p>
       </section>
+
+      <SatelliteSection />
 
       <section className="space-y-2">
         <div className="eyebrow">Basemap / blueprint</div>

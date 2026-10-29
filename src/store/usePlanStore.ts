@@ -7,7 +7,8 @@ import { readShared } from '../lib/share'
 import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
 
-export type Tool = 'select' | 'measure'
+/** 'geo' drags the satellite under the plan to line it up with the venue. */
+export type Tool = 'select' | 'measure' | 'geo'
 export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue'
 export type SaveState = 'saved' | 'saving' | 'error'
 
@@ -28,6 +29,7 @@ interface State {
   showGrid: boolean
   snapOn: boolean
   showBasemap: boolean
+  showSatellite: boolean
   showClearance: boolean
   showLabels: boolean
   viewOnly: boolean
@@ -106,6 +108,7 @@ export const usePlanStore = create<State>((set, get) => ({
   showGrid: true,
   snapOn: true,
   showBasemap: true,
+  showSatellite: true,
   showClearance: true,
   showLabels: true,
   viewOnly: init.viewOnly,

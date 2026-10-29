@@ -62,6 +62,18 @@ export interface Basemap {
   opacity: number
 }
 
+/** Pins the plan to the real world so satellite imagery can be drawn under it. */
+export interface GeoAnchor {
+  /** real-world position of the plan origin (venue top-left corner) */
+  lat: number
+  lng: number
+  /** degrees the satellite is turned clockwise under the plan (0 = north up) */
+  rotation: number
+  opacity: number
+  /** place name from search */
+  label?: string
+}
+
 export interface LayerState { visible: boolean; locked: boolean }
 
 export interface Plan {
@@ -76,6 +88,7 @@ export interface Plan {
   guests: Guest[]
   tags: TableTag[]
   basemap?: Basemap
+  geo?: GeoAnchor
   layers: Record<LayerId, LayerState>
   updatedAt: number
 }

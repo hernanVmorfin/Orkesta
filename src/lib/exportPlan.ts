@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf'
 import type { Plan } from '../types'
 import { isTableKind } from './catalog'
+import { SATELLITE_ATTRIBUTION, tileZoom, tilesFor } from './geo'
 
 async function toDataUrl(src: string): Promise<string> {
   if (src.startsWith('data:')) return src
@@ -10,6 +11,31 @@ async function toDataUrl(src: string): Promise<string> {
     r.onload = () => res(r.result as string)
     r.readAsDataURL(blob)
   })
+}
+
+/**
+ * The on-screen satellite only covers the visible area at screen resolution, and an SVG rendered
+ * as an image can't load remote tiles. Rebuild it for the whole venue at export resolution with
+ * tiles inlined as data URLs. Returns false when no tile could be loaded.
+ */
+async function inlineSatellite(group: Element, plan: Plan, pxPerM: number) {
+  const g = plan.geo!
+  const venue = [{ x: 0, y: 0 }, { x: plan.widthM, y: 0 }, { x: 0, y: plan.heightM }, { x: plan.widthM, y: plan.heightM }]
+  const tiles = tilesFor(g, venue, tileZoom(g.lat, pxPerM), 400)
+  group.replaceChildren()
+  for (let i = 0; i < tiles.length; i += 16) {
+    await Promise.all(tiles.slice(i, i + 16).map(async (t) => {
+      try {
+        const img = document.createElementNS('http://www.w3.org/2000/svg', 'image')
+        img.setAttribute('href', await toDataUrl(t.url))
+        img.setAttribute('x', String(t.x)); img.setAttribute('y', String(t.y))
+        img.setAttribute('width', String(t.size * 1.004)); img.setAttribute('height', String(t.size * 1.004))
+        img.setAttribute('preserveAspectRatio', 'none')
+        group.appendChild(img)
+      } catch { /* a missing tile stays blank */ }
+    }))
+  }
+  return group.childElementCount > 0
 }
 
 /** Clones the live SVG, fits the whole venue, strips UI-only nodes and rasterises it. */
@@ -29,6 +55,8 @@ export async function renderPlanPng(svg: SVGSVGElement, plan: Plan, pxWidth: num
   if (img) {
     try { img.setAttribute('href', await toDataUrl(img.getAttribute('href')!)) } catch { img.remove() }
   }
+  const sat = clone.querySelector('.satellite')
+  const satDrawn = sat && plan.geo ? await inlineSatellite(sat, plan, pxPerM) : false
   const xml = new XMLSerializer().serializeToString(clone)
   const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
   const image = new Image()
@@ -41,6 +69,16 @@ export async function renderPlanPng(svg: SVGSVGElement, plan: Plan, pxWidth: num
   ctx.fillRect(0, 0, pxWidth, pxHeight)
   ctx.drawImage(image, 0, 0)
   URL.revokeObjectURL(url)
+  if (satDrawn) {
+    // Imagery providers require visible attribution on every rendered map
+    const fs = Math.max(12, Math.round(pxWidth / 160))
+    ctx.font = `${fs}px Geist, Arial, sans-serif`
+    const tw = ctx.measureText(SATELLITE_ATTRIBUTION).width
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'
+    ctx.fillRect(pxWidth - tw - fs * 1.2, pxHeight - fs * 1.8, tw + fs * 1.2, fs * 1.8)
+    ctx.fillStyle = '#0a1729'
+    ctx.fillText(SATELLITE_ATTRIBUTION, pxWidth - tw - fs * 0.6, pxHeight - fs * 0.6)
+  }
   return { dataUrl: canvas.toDataURL('image/png'), pxWidth, pxHeight }
 }
 
