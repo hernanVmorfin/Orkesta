@@ -11,7 +11,17 @@ export const SATELLITE_URL: string = import.meta.env.VITE_SATELLITE_TILES
   ?? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 export const SATELLITE_ATTRIBUTION: string = import.meta.env.VITE_SATELLITE_ATTRIBUTION
   ?? 'Imagery © Esri, Maxar, Earthstar Geographics'
-export const MAX_TILE_ZOOM = 19
+/** Deepest tile level the provider serves; Esri stops at 19, keyed providers such as MapTiler or Mapbox go to 20–22. */
+export const MAX_TILE_ZOOM = Math.min(23, Math.max(17, Number(import.meta.env.VITE_SATELLITE_MAX_ZOOM) || 19))
+
+/**
+ * Place search. Defaults to OpenStreetMap Nominatim; set VITE_GEOCODER_URL to a licensed geocoder with `{q}`
+ * where the search text goes. Nominatim-style JSON arrays (Nominatim, LocationIQ) and GeoJSON feature
+ * collections (MapTiler, Mapbox, Geoapify) are both understood.
+ */
+const GEOCODER_URL: string = import.meta.env.VITE_GEOCODER_URL
+  ?? 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q={q}'
+export const GEOCODER_NAME: string = import.meta.env.VITE_GEOCODER_NAME ?? 'OpenStreetMap'
 
 const TILE = 256
 const M_PER_DEG = 111320
@@ -93,8 +103,8 @@ export interface Place extends LatLng { label: string }
 const COORDS = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/
 
 /**
- * Pasted "lat, lng" is used as-is; anything else goes to OpenStreetMap Nominatim
- * (free, about 1 request per second; run searches on submit, never per keystroke).
+ * Pasted "lat, lng" is used as-is; anything else goes to the geocoder (Nominatim by default: free, about
+ * 1 request per second, so searches run on submit, never per keystroke).
  */
 export async function searchPlaces(q: string): Promise<Place[]> {
   const m = q.match(COORDS)
@@ -102,9 +112,21 @@ export async function searchPlaces(q: string): Promise<Place[]> {
     const lat = +m[1], lng = +m[2]
     return Math.abs(lat) <= 85 && Math.abs(lng) <= 180 ? [{ label: `${lat}, ${lng}`, lat, lng }] : []
   }
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`
-  const res = await fetch(url, { headers: { 'Accept-Language': navigator.language } })
+  const res = await fetch(GEOCODER_URL.replace('{q}', encodeURIComponent(q)), { headers: { 'Accept-Language': navigator.language } })
   if (!res.ok) throw new Error(`Place search failed (${res.status})`)
-  const data = (await res.json()) as { display_name: string; lat: string; lon: string }[]
-  return data.map((d) => ({ label: d.display_name, lat: +d.lat, lng: +d.lon }))
+  return parsePlaces(await res.json())
+}
+
+type NominatimHit = { display_name: string; lat: string; lon: string }
+type GeoJsonHit = { place_name?: string; properties?: { label?: string; name?: string; formatted?: string; full_address?: string }; center?: [number, number]; geometry?: { coordinates?: [number, number] } }
+
+/** Results from either a Nominatim-style array or a GeoJSON FeatureCollection. */
+export function parsePlaces(data: unknown): Place[] {
+  if (Array.isArray(data)) return (data as NominatimHit[]).slice(0, 5).map((d) => ({ label: d.display_name, lat: +d.lat, lng: +d.lon }))
+  const features = (data as { features?: GeoJsonHit[] })?.features ?? []
+  return features.slice(0, 5).flatMap((f) => {
+    const c = f.center ?? f.geometry?.coordinates // [lng, lat]
+    const label = f.place_name ?? f.properties?.full_address ?? f.properties?.formatted ?? f.properties?.label ?? f.properties?.name
+    return c && Number.isFinite(c[0]) && Number.isFinite(c[1]) && label ? [{ label, lat: c[1], lng: c[0] }] : []
+  })
 }

@@ -42,8 +42,14 @@ export function exitFlow(e: PlanElement, plan: Plan) {
 }
 
 export const crowdCapacity = (e: PlanElement) => Math.floor(areaOf(e) / Math.max(0.05, calcInputs(e).sqmPerPerson ?? 0.5))
-export const sectionCount = (e: PlanElement) => Math.ceil(lengthOf(e) / Math.max(0.1, calcInputs(e).segmentM ?? 2) - 1e-9)
-export const postCount = (e: PlanElement) => (e.points?.length ? Math.floor(lengthOf(e) / Math.max(0.1, calcInputs(e).spacingM ?? 1) + 1e-9) + 1 : 0)
+/** Extra pieces to order on top of the line (corners, gates, damage). */
+export const sparesOf = (e: PlanElement) => Math.max(0, Math.round(calcInputs(e).spares ?? 0))
+/** Sections to cover the line, rounded up, plus spares. */
+export const sectionCount = (e: PlanElement) => Math.ceil(lengthOf(e) / Math.max(0.1, calcInputs(e).segmentM ?? 2) - 1e-9) + sparesOf(e)
+/** Posts or cones at both ends and every `spacingM` between, plus spares. */
+export const postCount = (e: PlanElement) => (e.points?.length ? Math.floor(lengthOf(e) / Math.max(0.1, calcInputs(e).spacingM ?? 1) + 1e-9) + 1 + sparesOf(e) : 0)
+const withSpares = (e: PlanElement, total: number) => `${n0(total)}${sparesOf(e) ? ` (incl. ${sparesOf(e)} spare)` : ''}`
+const SPARES: CalcField = { key: 'spares', label: 'Spares', unit: 'pcs', step: 1, min: 0 }
 
 function minutes(m: number) {
   const s = Math.round(m * 60)
@@ -64,14 +70,14 @@ export const CALCS: Record<CalcId, CalcDef> = {
   },
   segments: {
     title: 'Sections',
-    fields: [{ key: 'segmentM', label: 'Section length', unit: 'm', step: 0.05, min: 0.2 }],
-    run: (e) => [{ label: 'Length', value: fmtLen(lengthOf(e)) }, { label: 'Sections', value: n0(sectionCount(e)) }],
-    hint: 'Rounded up to cover the full length. Add a few spares for corners and gates.',
+    fields: [{ key: 'segmentM', label: 'Section length', unit: 'm', step: 0.05, min: 0.2 }, SPARES],
+    run: (e) => [{ label: 'Length', value: fmtLen(lengthOf(e)) }, { label: 'Sections', value: withSpares(e, sectionCount(e)) }],
+    hint: 'Rounded up to cover the full length. Add spares for corners, gates and damage; they count in the inventory.',
   },
   posts: {
     title: 'Posts',
-    fields: [{ key: 'spacingM', label: 'Spacing', unit: 'm', step: 0.05, min: 0.2 }],
-    run: (e) => [{ label: 'Length', value: fmtLen(lengthOf(e)) }, { label: e.kind === 'cone-line' ? 'Cones' : 'Posts', value: n0(postCount(e)) }],
+    fields: [{ key: 'spacingM', label: 'Spacing', unit: 'm', step: 0.05, min: 0.2 }, SPARES],
+    run: (e) => [{ label: 'Length', value: fmtLen(lengthOf(e)) }, { label: e.kind === 'cone-line' ? 'Cones' : 'Posts', value: withSpares(e, postCount(e)) }],
   },
   route: {
     title: 'Travel time',

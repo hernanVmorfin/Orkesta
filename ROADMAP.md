@@ -63,7 +63,7 @@ What already works end to end:
 
 These are real problems in the current code. Fix them before adding features.
 
-**Status (2026-10-29):** 0.1, 0.2, 0.3, 0.5 and 0.6 are done on branch `docs/roadmap-from-oneplan-research` and tested in the browser. 0.4 (the name) is waiting on a decision.
+**Status (2026-10-29):** 0.1, 0.2, 0.3, 0.5 and 0.6 are done on branch `docs/roadmap-from-oneplan-research` and tested in the browser. 0.4: the product is named **Orkesta** (decided 2026-10-30). Browser storage keys keep their old `inbest-floorplan` names so saved events still open.
 
 | # | Problem | Where | Fix | Size |
 |---|---|---|---|---|
@@ -141,9 +141,9 @@ Done when: you can draw a 120 m barrier line and see its length and segment coun
   - Barrier sections round up (`ceil`), so the line is fully covered.
   - Posts and cones are `floor(length ÷ spacing) + 1`.
   - Until arrivals are entered, the expected crowd is spread over 75 minutes.
-- Not built:
-  - the "+1 spare" toggle (the hint says to add spares);
-  - the warning when a queue won't fit the space in front of a desk.
+- Added later (`feature/orkesta-polish`):
+  - a **Spares** field on barrier, fence, queue-line and cone calculators; spares count in the inventory;
+  - a **"Queue won't fit"** warning: the longest queue (about 4 people per meter) is compared with the queue lines (stanchions) drawn on the plan.
 
 ### 5.1 Calculator framework
 
@@ -200,7 +200,7 @@ OnePlan's arrival and exit calculators are standalone websites that know nothing
   - four library packs;
   - custom objects: name, size, colour, round or rectangular, layer;
   - five templates (Gala, Conference, Cocktail, Wedding, Expo). Each opens with clear aisles, unblocked exits and realistic Ops figures.
-- Not built: an icon picker for custom objects.
+- Custom objects got an icon picker later (`feature/orkesta-polish`).
 
 1. **Levels/rooms per event** (Ballroom, Foyer, Terrace, Floor 2): each has its own footprint, basemap and elements, with one guest list across all of them. Includes a level switcher and duplicate level. Data model: `Plan.levels: Level[]` and `PlanElement.levelId`. **M–L**
 2. **Folders/groups** inside layers (e.g. "Sponsor booths"), with show/lock per group and per object in the list. **M**
@@ -252,9 +252,10 @@ A cheaper option is "Place aerial image by address": fetch a static satellite im
 - **Placing it:** search an address (Nominatim) or paste `lat, lng`. You can drag the satellite to align it, rotate it around the venue centre, set its opacity, or turn it off. A north arrow and the imagery credit show on the canvas.
 - **Everywhere else:** it shows in view-only links, and exports re-fetch tiles for the whole venue at export resolution, with the credit stamped on.
 
+Since then (`feature/orkesta-polish`): the imagery provider, its deepest zoom level and the place-search provider are settings (`VITE_SATELLITE_TILES`, `VITE_SATELLITE_MAX_ZOOM`, `VITE_GEOCODER_URL`; see README). What's left there is signing up with a licensed provider and setting its key.
+
 Still open:
-- a keyed imagery provider and geocoder for production;
-- zoom beyond tile level 19, which gets blurry when zoomed in close (Google/Mapbox go to about 21–22);
+- an account with a licensed imagery and place-search provider (MapTiler, Mapbox, Esri or Google);
 - GeoJSON import/export;
 - lat/lng readout per object.
 
@@ -262,7 +263,14 @@ Still open:
 
 ## 9. Suggested order (next 5 pull requests)
 
-**Status (2026-10-30):** items 1–5 are done, and so are levels and library packs. The backend is next: ROADMAP section 11, "Connecting a real server", and COLLAB_PROMPTS.md.
+**Status (2026-10-30):** items 1–5 are done, and so are levels and library packs. Also done since (`feature/orkesta-polish`):
+- PDF venue drawings, with page choice and drawing scale (1:100);
+- unit tests (`npm test`) for the plan maths, auto-seat, share links and templates, run before every deploy;
+- the app works offline and installs on phones and desktops;
+- Ops figures and comments on phones (section 10, M5);
+- the product name, Orkesta.
+
+The backend is next: ROADMAP section 11, "Connecting a real server", and COLLAB_PROMPTS.md. QR check-in comes from iNBest's existing system and will be integrated later.
 
 1. **Hardening:** 0.1 privacy, 0.2 IndexedDB, 0.3 multiple events, 0.5 code-split, 0.6 shortcuts.
 2. **Drawn lines and areas, measurements, styling**: Phase 1, items 1–4.
@@ -294,6 +302,7 @@ OnePlan is outdoor site planning with paywalls: Free allows 25 objects; Pro is $
 | M1 | Mobile shell with bottom tabs (Map, Tables, Guests, Details). Map: read-only plan and satellite, pinch-to-zoom (also on desktop touch screens), drag to pan, tap a table or object for a details sheet, guest/table search that centers the map, zoom/fit/satellite buttons (44 px). | **Done** on `feature/mobile-companion` |
 | M2 | Tables tab (fill bars, tag filter) and Guests tab (search, filters, check-in toggle), with "show on map" from either | **Done** |
 | M3 | Details tab (event summary, aisle-check status, PDF download, share link), event switcher on your own phone | **Done** |
+| M5 | Ops figures (evacuation, arrivals, power, load-in, inventory) and comments on phones, read-only, with "show on map" | **Done** on `feature/orkesta-polish`: a sixth tab, Ops, plus comment pins and a toggle on the map. |
 | M4 | Tablets: collapsible library and panels, a share dialog that fits, visible delete actions, tap-to-seat instead of drag-and-drop, 44 px targets in the editor | **Done**. Below 1280 px the library and panel are drawers and view toggles fold into a menu. Touch screens get 40 px controls and always-visible delete buttons. Tap-to-seat already existed: the table picker in each guest row and in the Inspector. |
 
 **Still to test on real devices:** iOS Safari and Android Chrome. Pinch and the safe areas were only checked in an emulated 375 × 812 viewport, with synthetic touch events. This needs the app hosted over HTTPS.

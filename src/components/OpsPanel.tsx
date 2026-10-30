@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { ChevronRight, TriangleAlert, Download, CalendarClock, MapPin } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { DEFAULT_SAFETY, safetyOf } from '../lib/calcs'
-import { arrivalModel, arrivalOf, expectedCrowd, clashes, egress, entrances, exitBlockers, inventory, powerBudget, scheduleItems } from '../lib/ops'
+import { arrivalModel, arrivalOf, expectedCrowd, queueLineM, clashes, egress, entrances, exitBlockers, inventory, powerBudget, scheduleItems } from '../lib/ops'
 import { activeLevel, levelsOf } from '../lib/levels'
 import { requestFocus } from '../lib/canvas'
 import { download } from '../lib/csv'
@@ -35,34 +35,50 @@ const fmtMin = (m: number) => {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`
 }
 
+interface OpsOptions {
+  /** phones: figures only, no settings */
+  readOnly?: boolean
+  /** phones: called after selecting something, to switch to the map and center it */
+  onShow?: (p: { x: number; y: number }) => void
+}
+const OpsCtx = createContext<OpsOptions>({})
+
+const useReadOnly = () => {
+  const viewOnly = usePlanStore((s) => s.viewOnly)
+  const { readOnly } = useContext(OpsCtx)
+  return viewOnly || !!readOnly
+}
+
 /** Jumps to an object: shows its level, selects it and centers the view on it. */
 function useShow() {
   const s = usePlanStore()
+  const { onShow } = useContext(OpsCtx)
   return (e: PlanElement) => {
-    s.set({ levelId: e.levelId ?? null, selection: [e.id], rightTab: 'inspect' })
-    requestAnimationFrame(() => requestFocus({ x: e.x, y: e.y, zoom: 20 }))
+    s.set({ levelId: e.levelId ?? null, selection: [e.id], ...(onShow ? {} : { rightTab: 'inspect' as const }) })
+    if (onShow) onShow(e)
+    else requestAnimationFrame(() => requestFocus({ x: e.x, y: e.y, zoom: 20 }))
   }
 }
 
 /** Ops tab: evacuation, arrivals, power, load-in schedule, inventory and comments. */
-export function OpsPanel() {
+export function OpsPanel({ readOnly = false, onShow }: OpsOptions) {
   const s = usePlanStore()
   return (
-    <div>
+    <OpsCtx.Provider value={{ readOnly, onShow }}>
       <EgressSection />
       <ArrivalSection />
       <PowerSection />
       <ScheduleSection />
       <InventorySection />
       {(s.plan.comments?.length ?? 0) > 0 && <CommentsSection />}
-    </div>
+    </OpsCtx.Provider>
   )
 }
 
 function EgressSection() {
   const s = usePlanStore()
   const show = useShow()
-  const ro = s.viewOnly
+  const ro = useReadOnly()
   const eg = egress(s.plan, s.levelId)
   const blocked = exitBlockers(s.plan, s.levelId)
   const safety = safetyOf(s.plan)
@@ -138,7 +154,7 @@ function EgressSection() {
 function ArrivalSection() {
   const s = usePlanStore()
   const show = useShow()
-  const ro = s.viewOnly
+  const ro = useReadOnly()
   const model = arrivalOf(s.plan)
   const ents = entrances(s.plan)
   const { rows, capacity } = arrivalModel(s.plan)
@@ -147,9 +163,11 @@ function ArrivalSection() {
   const [mins, setMins] = useState(60)
   const peak = rows.reduce((a, b) => (b.queue > a.queue ? b : a), rows[0] ?? { queue: 0, waitMin: 0, lengthM: 0, time: '' })
   const cleared = rows.find((r, i) => i >= model.slots.length - 1 && r.queue === 0)
+  const lineM = queueLineM(s.plan)
+  const overflows = peak.queue > 0 && lineM > 0 && peak.lengthM > lineM
 
   return (
-    <Section title="Arrivals" badge={!ents.length ? <Warn>No entrances</Warn> : peak.queue > 0 ? <span className="font-mono text-xs text-muted">peak wait {fmtMin(peak.waitMin)}</span> : undefined}>
+    <Section title="Arrivals" badge={!ents.length ? <Warn>No entrances</Warn> : overflows ? <Warn>Queue won’t fit</Warn> : peak.queue > 0 ? <span className="font-mono text-xs text-muted">peak wait {fmtMin(peak.waitMin)}</span> : undefined}>
       {ents.length ? (
         <ul className="divide-y divide-bg-2 rounded-lg border border-bg-2">
           {ents.map(({ e, per15 }) => (
@@ -209,6 +227,15 @@ function ArrivalSection() {
           ? <>Longest queue <b>{peak.queue}</b> people (about <b>{peak.lengthM} m</b>, <b>{fmtMin(peak.waitMin)}</b> wait) at {peak.time}{cleared ? `; clears by ${cleared.time}` : ''}.</>
           : 'No queue builds up with this capacity.'}
       </p>
+      {peak.queue > 0 && (overflows ? (
+        <p className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
+          The longest queue needs about <b>{peak.lengthM} m</b> of line, but the plan has <b>{Math.round(lineM)} m</b> of queue lines. Add queue lines, add desks, or open the doors earlier.
+        </p>
+      ) : (
+        <p className="text-xs text-muted">
+          {lineM > 0 ? `Fits in the ${Math.round(lineM)} m of queue lines on the plan.` : 'Draw queue lines (stanchions) where people will wait to check the queue fits.'}
+        </p>
+      ))}
       <p className="text-[11px] text-muted">Queue = previous queue + arrivals − capacity, per 15 minutes; about 4 people per meter of queue.</p>
     </Section>
   )
@@ -240,13 +267,40 @@ function PowerSection() {
 
 function ScheduleSection() {
   const s = usePlanStore()
+  const show = useShow()
+  const { onShow } = useContext(OpsCtx)
   const items = scheduleItems(s.plan)
   const cl = clashes(items)
   const vendors = new Set(items.map((i) => i.vendor))
+  const when = (t: number) => new Date(t).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
   return (
     <Section title="Load-in schedule" badge={cl.length ? <Warn>{cl.length} clash{cl.length > 1 ? 'es' : ''}</Warn> : items.length ? <span className="font-mono text-xs text-muted">{items.length}</span> : undefined}>
       <p className="text-xs">{items.length ? <>{items.length} objects from {vendors.size} vendor{vendors.size > 1 ? 's' : ''} have load-in or load-out times.</> : 'Set load-in and load-out times in each object’s Vendor & logistics section to build the schedule.'}</p>
-      <button className="btn w-full justify-center border border-bg-2" disabled={!items.length} onClick={() => s.set({ dialog: 'schedule' })}><CalendarClock size={15} />Open schedule</button>
+      {cl.length > 0 && (
+        <ul className="space-y-1">
+          {cl.slice(0, 5).map((c, i) => (
+            <li key={i} className="rounded-md bg-red-50 px-3 py-1.5 text-xs text-red-800">
+              <b>{c.a.zone}</b>: <button className="hover:underline" onClick={() => show(c.a.e)}>{c.a.vendor}</button> and{' '}
+              <button className="hover:underline" onClick={() => show(c.b.e)}>{c.b.vendor}</button> overlap at {when(Math.max(c.a.start, c.b.start))}
+            </li>
+          ))}
+        </ul>
+      )}
+      {onShow ? (
+        // Phones: the timeline in order, without the desktop chart
+        <ul className="divide-y divide-bg-2 rounded-lg border border-bg-2">
+          {[...items].sort((a, b) => a.start - b.start).slice(0, 30).map((i) => (
+            <li key={i.e.id}>
+              <button className="flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-xs active:bg-bg" onClick={() => show(i.e)}>
+                <span className="w-24 shrink-0 font-mono text-[11px] text-muted">{when(i.start)}</span>
+                <span className="min-w-0 flex-1 truncate"><b>{i.vendor}</b> · {i.e.label}{i.zone ? ` · ${i.zone}` : ''}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <button className="btn w-full justify-center border border-bg-2" disabled={!items.length} onClick={() => s.set({ dialog: 'schedule' })}><CalendarClock size={15} />Open schedule</button>
+      )}
     </Section>
   )
 }
@@ -279,10 +333,12 @@ function CommentsSection() {
   const all = s.plan.comments ?? []
   const open = all.filter((c) => !c.resolved)
   const list = s.showResolved ? all : open
+  const { onShow } = useContext(OpsCtx)
   const go = (id: string) => {
     const c = all.find((x) => x.id === id)!
     s.set({ levelId: c.levelId ?? null, activeComment: id, showComments: true, showResolved: s.showResolved || !!c.resolved })
-    requestAnimationFrame(() => requestFocus({ x: c.x, y: c.y }))
+    if (onShow) onShow(c)
+    else requestAnimationFrame(() => requestFocus({ x: c.x, y: c.y }))
   }
   return (
     <Section title="Comments" badge={open.length ? <span className="rounded-full bg-accent-deep px-1.5 text-[11px] leading-4 text-white">{open.length}</span> : undefined}>

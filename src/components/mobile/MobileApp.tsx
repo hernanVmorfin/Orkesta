@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Map as MapIcon, Armchair, Users, Info, Eye, MessagesSquare } from 'lucide-react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { Map as MapIcon, Armchair, Users, Info, Eye, MessagesSquare, Gauge } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { showPin, useUnread } from '../../store/team'
 import { isTableKind } from '../../lib/catalog'
@@ -12,17 +12,20 @@ import { MobileTables } from './MobileTables'
 import { MobileGuests } from './MobileGuests'
 import { MobileDetails } from './MobileDetails'
 
-type Tab = 'map' | 'tables' | 'guests' | 'team' | 'details'
+const OpsPanel = lazy(() => import('../OpsPanel').then((m) => ({ default: m.OpsPanel })))
+
+type Tab = 'map' | 'tables' | 'guests' | 'ops' | 'team' | 'details'
 
 const TABS: { id: Tab; label: string; icon: typeof MapIcon }[] = [
   { id: 'map', label: 'Map', icon: MapIcon },
   { id: 'tables', label: 'Tables', icon: Armchair },
   { id: 'guests', label: 'Guests', icon: Users },
+  { id: 'ops', label: 'Ops', icon: Gauge },
   { id: 'team', label: 'Team', icon: MessagesSquare },
   { id: 'details', label: 'Details', icon: Info },
 ]
 
-/** Phone layout: review the plan, tables and guests, check guests in and read team messages. Editing stays on desktop. */
+/** Phone layout: review the plan, tables, guests and Ops figures, check guests in and read team messages. Editing stays on desktop. */
 export function MobileApp() {
   const plan = usePlanStore((s) => s.plan)
   const viewOnly = usePlanStore((s) => s.viewOnly)
@@ -40,6 +43,13 @@ export function MobileApp() {
     usePlanStore.getState().set({ selection: [id], highlightTable: isTableKind(e.kind) ? id : null })
     setFoundGuest(guestId)
     focus.current = { x: e.x, y: e.y, zoom: 28 }
+    setTab('map')
+  }
+
+  /** From the Ops tab: the object or comment is already selected; center it on the map. */
+  const showPoint = (p: { x: number; y: number }) => {
+    setFoundGuest(null)
+    focus.current = { x: p.x, y: p.y, zoom: 28 }
     setTab('map')
   }
 
@@ -78,6 +88,11 @@ export function MobileApp() {
         </div>
         {tab === 'tables' && <MobileTables onShowOnMap={(id) => showOnMap(id)} />}
         {tab === 'guests' && <MobileGuests onShowOnMap={showOnMap} />}
+        {tab === 'ops' && (
+          <div className="absolute inset-0 overflow-y-auto">
+            <Suspense fallback={<p className="p-4 text-sm text-muted">Loading…</p>}><OpsPanel readOnly onShow={showPoint} /></Suspense>
+          </div>
+        )}
         {tab === 'team' && <div className="absolute inset-0 overflow-y-auto"><TeamPanel onShowPin={showPinOnMap} /></div>}
         {tab === 'details' && <MobileDetails />}
         <UrgentBanner onView={openTeamMessages} className="absolute inset-x-3 top-3 z-30" />

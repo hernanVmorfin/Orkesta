@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { FilePlus2, LayoutTemplate } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { LAYERS } from '../../lib/catalog'
+import { ICONS } from '../../lib/icons'
 import { TEMPLATES } from '../../data/templates'
 import type { LayerId } from '../../types'
 import { Modal, NumField } from './Modal'
@@ -43,9 +44,10 @@ export function CustomItemDialog({ onClose }: { onClose: () => void }) {
   const [color, setColor] = useState('#1ea7e8')
   const [round, setRound] = useState(false)
   const [layer, setLayer] = useState<LayerId>('decor')
+  const [icon, setIcon] = useState<string | undefined>()
   const add = () => {
     const kind = `custom-${nanoid(6)}`
-    s.mutate((p) => ({ ...p, customItems: [...(p.customItems ?? []), { kind, name: name.trim(), w, h, color, round, layer }] }))
+    s.mutate((p) => ({ ...p, customItems: [...(p.customItems ?? []), { kind, name: name.trim(), w, h, color, round, layer, icon }] }))
     s.set({ placing: kind, tool: 'select' })
     onClose()
   }
@@ -67,6 +69,19 @@ export function CustomItemDialog({ onClose }: { onClose: () => void }) {
         </label>
       </div>
       <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" className="accent-[#1ea7e8]" checked={round} onChange={(e) => setRound(e.target.checked)} />Round</label>
+      <div className="mt-3">
+        <span className="text-[11px] text-muted">Icon (optional)</span>
+        <div className="mt-1 grid grid-cols-10 gap-1" role="radiogroup" aria-label="Icon">
+          <button type="button" role="radio" aria-checked={!icon} title="No icon" onClick={() => setIcon(undefined)}
+            className={`grid h-8 place-items-center rounded-md border text-[10px] text-muted ${!icon ? 'border-accent bg-accent/10' : 'border-bg-2'}`}>None</button>
+          {Object.entries(ICONS).map(([id, Icon]) => (
+            <button key={id} type="button" role="radio" aria-checked={icon === id} title={id} onClick={() => setIcon(id)}
+              className={`grid h-8 place-items-center rounded-md border ${icon === id ? 'border-accent bg-accent/10 text-accent-deep' : 'border-bg-2 text-ink-2 hover:bg-bg'}`}>
+              <Icon size={16} />
+            </button>
+          ))}
+        </div>
+      </div>
       <p className="mt-3 text-[11px] text-muted">It's added to this event's library, then you click the plan to place it.</p>
       <div className="mt-4 flex justify-end gap-2">
         <button className="btn" onClick={onClose}>Cancel</button>

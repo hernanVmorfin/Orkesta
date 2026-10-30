@@ -1,10 +1,14 @@
 import { useRef, useState } from 'react'
-import { Upload, Plus, FileUp, Ruler } from 'lucide-react'
+import { Upload, Plus, FileUp, Ruler, FileText } from 'lucide-react'
+import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { usePlanStore } from '../store/usePlanStore'
 import { dist } from '../lib/geometry'
 import type { Plan } from '../types'
 import { SatelliteSection } from './SatelliteSection'
 import { activeLevel, levelsOf, setVenue, venueOf } from '../lib/levels'
+import { toast } from '../lib/toast'
+
+const isPdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
 
 export function VenuePanel() {
   const s = usePlanStore()
@@ -12,6 +16,10 @@ export function VenuePanel() {
   const imgRef = useRef<HTMLInputElement>(null)
   const jsonRef = useRef<HTMLInputElement>(null)
   const [known, setKnown] = useState('6')
+  // A PDF with several pages waits here until a page is picked
+  const [pdf, setPdf] = useState<{ doc: PDFDocumentProxy; name: string; page: number } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [ratio, setRatio] = useState('')
   const up = (patch: Partial<Plan>) => s.mutate((p) => ({ ...p, ...patch }))
   // Footprint and drawing belong to the level on screen
   const venue = venueOf(plan, s.levelId)
@@ -30,6 +38,44 @@ export function VenuePanel() {
       img.src = r.result as string
     }
     r.readAsDataURL(f)
+  }
+
+  const importPdfPage = async (doc: PDFDocumentProxy, page: number) => {
+    setBusy(true)
+    try {
+      const { renderPdfPage } = await import('../lib/pdfImport')
+      const r = await renderPdfPage(doc, page)
+      upVenue({ basemap: { src: r.src, widthM: venue.widthM, aspect: r.aspect, x: 0, y: 0, opacity: 0.5, pageWidthMm: r.pageWidthMm } })
+      s.set({ showBasemap: true })
+      setPdf(null)
+      setRatio('')
+      void doc.loadingTask.destroy()
+    } catch (e) { console.error(e); toast('Couldn’t read that page of the PDF') }
+    setBusy(false)
+  }
+
+  const onFile = async (f: File) => {
+    if (!isPdf(f)) { onImage(f); return }
+    setBusy(true)
+    try {
+      const { openPdf } = await import('../lib/pdfImport')
+      const doc = await openPdf(f)
+      setBusy(false)
+      if (doc.numPages > 1) setPdf({ doc, name: f.name, page: 1 })
+      else await importPdfPage(doc, 1)
+    } catch (e) {
+      console.error(e)
+      setBusy(false)
+      toast((e as Error)?.name === 'PasswordException' ? 'That PDF is password-protected. Save an unlocked copy and try again.' : 'Couldn’t open that PDF')
+    }
+  }
+
+  /** Sets the real size from the drawing's stated scale (1:100 → page width × 100). */
+  const applyRatio = async () => {
+    const k = parseFloat(ratio)
+    if (!bm?.pageWidthMm || !(k > 0)) return
+    const { widthAtScale } = await import('../lib/pdfImport')
+    upVenue({ basemap: { ...bm, widthM: widthAtScale(bm.pageWidthMm, k) } })
   }
 
   /** Calibrate: the current measure line should equal `known` meters → rescale basemap around its origin. */
@@ -86,8 +132,23 @@ export function VenuePanel() {
 
       <section className="space-y-2">
         <div className="eyebrow">Basemap / blueprint</div>
-        <button className="btn w-full justify-center border border-dashed border-accent/50" onClick={() => imgRef.current?.click()}><Upload size={15} />Upload venue drawing or aerial image</button>
-        <input ref={imgRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onImage(f); e.target.value = '' }} />
+        <button className="btn w-full justify-center border border-dashed border-accent/50" disabled={busy} onClick={() => imgRef.current?.click()}>
+          <Upload size={15} />{busy ? 'Reading the drawing…' : 'Upload venue drawing (PDF or image)'}
+        </button>
+        <input ref={imgRef} type="file" accept="image/*,application/pdf,.pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = '' }} />
+        {pdf && (
+          <div className="space-y-2 rounded-lg border border-accent/40 bg-accent/5 p-3">
+            <div className="flex items-center gap-1 font-semibold"><FileText size={14} /><span className="truncate">{pdf.name}</span></div>
+            <p className="text-[11px] text-muted">This PDF has {pdf.doc.numPages} pages. Pick the floor plan.</p>
+            <div className="flex gap-1">
+              <select className="input" value={pdf.page} onChange={(e) => setPdf({ ...pdf, page: +e.target.value })}>
+                {Array.from({ length: pdf.doc.numPages }, (_, i) => <option key={i} value={i + 1}>Page {i + 1}</option>)}
+              </select>
+              <button className="btn btn-primary shrink-0" disabled={busy} onClick={() => void importPdfPage(pdf.doc, pdf.page)}>{busy ? 'Reading…' : 'Use page'}</button>
+              <button className="btn shrink-0" onClick={() => { void pdf.doc.loadingTask.destroy(); setPdf(null) }}>Cancel</button>
+            </div>
+          </div>
+        )}
         {bm && (
           <>
             <label className="block"><span className="text-[11px] text-muted">Opacity {Math.round(bm.opacity * 100)}%</span>
@@ -98,6 +159,21 @@ export function VenuePanel() {
               <label><span className="text-[11px] text-muted">Offset X</span><input className="input font-mono" type="number" step={0.1} value={bm.x} onChange={(e) => upVenue({ basemap: { ...bm, x: +e.target.value } })} /></label>
               <label><span className="text-[11px] text-muted">Offset Y</span><input className="input font-mono" type="number" step={0.1} value={bm.y} onChange={(e) => upVenue({ basemap: { ...bm, y: +e.target.value } })} /></label>
             </div>
+            {bm.pageWidthMm && (
+              <div className="rounded-lg bg-bg p-3">
+                <div className="mb-1 flex items-center gap-1 font-semibold"><FileText size={14} />Drawing scale</div>
+                <p className="mb-2 text-[11px] text-muted">
+                  If the sheet states a scale, enter it to size the drawing exactly. Works for PDFs exported at their printed size, as most CAD exports are; otherwise calibrate below.
+                </p>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted">1 :</span>
+                  <input className="input w-24 font-mono" inputMode="numeric" value={ratio} placeholder={String(Math.round((bm.widthM * 1000) / bm.pageWidthMm))}
+                    onChange={(e) => setRatio(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void applyRatio() }} />
+                  <button className="btn btn-primary" disabled={!(parseFloat(ratio) > 0)} onClick={() => void applyRatio()}>Apply</button>
+                </div>
+                <p className="mt-1 text-[11px] text-muted">Page {Math.round(bm.pageWidthMm)} mm wide, now 1:{Math.round((bm.widthM * 1000) / bm.pageWidthMm)} ({bm.widthM} m).</p>
+              </div>
+            )}
             <div className="rounded-lg bg-bg p-3">
               <div className="mb-1 flex items-center gap-1 font-semibold"><Ruler size={14} />Calibrate scale</div>
               <ol className="mb-2 list-decimal pl-4 text-[11px] text-muted">
@@ -111,7 +187,13 @@ export function VenuePanel() {
                 <button className="btn btn-primary" disabled={!s.measure} onClick={calibrate}>Apply</button>
               </div>
             </div>
-            <button className="btn text-red-600" onClick={() => upVenue({ basemap: undefined })}>Remove basemap</button>
+            <div className="flex flex-wrap gap-1">
+              <button className="btn border border-bg-2" title="Set the venue width and depth to the drawing's size and line them up"
+                onClick={() => upVenue({ widthM: +bm.widthM.toFixed(2), heightM: +(bm.widthM / bm.aspect).toFixed(2), basemap: { ...bm, x: 0, y: 0 } })}>
+                Fit footprint to drawing
+              </button>
+              <button className="btn text-red-600" onClick={() => upVenue({ basemap: undefined })}>Remove basemap</button>
+            </div>
           </>
         )}
       </section>

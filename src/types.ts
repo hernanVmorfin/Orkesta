@@ -125,7 +125,7 @@ export interface ArrivalModel { start: string; slots: number[] }
 /** Cell references (A1, B2…) drawn over the venue. */
 export interface GridRef { cellM: number; show: boolean }
 
-export interface CustomItem { kind: string; name: string; w: number; h: number; color: string; round?: boolean; layer: LayerId }
+export interface CustomItem { kind: string; name: string; w: number; h: number; color: string; round?: boolean; layer: LayerId; icon?: string }
 
 export interface Guest {
   id: string
@@ -150,6 +150,8 @@ export interface Basemap {
   x: number
   y: number
   opacity: number
+  /** printed page width when imported from a PDF, so a drawing scale (1:100) can size it */
+  pageWidthMm?: number
 }
 
 /** Pins the plan to the real world so satellite imagery can be drawn under it. */

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, X, Plus, Minus, Maximize, Satellite } from 'lucide-react'
+import { Search, X, Plus, Minus, Maximize, Satellite, MessageSquare } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { FloorCanvas } from '../FloorCanvas'
 import { isTableKind } from '../../lib/catalog'
@@ -90,6 +90,10 @@ export function MobileMap({ foundGuest, setFoundGuest }: { foundGuest: string | 
         {plan.geo && (
           <MapButton label={s.showSatellite ? 'Hide satellite' : 'Show satellite'} active={s.showSatellite}
             onClick={() => s.set({ showSatellite: !s.showSatellite })}><Satellite size={18} /></MapButton>
+        )}
+        {(plan.comments?.length ?? 0) > 0 && (
+          <MapButton label={s.showComments ? 'Hide comments' : 'Show comments'} active={s.showComments}
+            onClick={() => s.set({ showComments: !s.showComments, activeComment: null })}><MessageSquare size={18} /></MapButton>
         )}
       </div>
 

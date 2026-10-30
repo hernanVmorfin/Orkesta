@@ -17,7 +17,10 @@ export function PasswordGate() {
   return (
     <div className="grid h-full place-items-center bg-bg p-4">
       <form className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onSubmit={(e) => { e.preventDefault(); void submit() }}>
-        <img src="/brand/logo-inbest.png" alt="iNBest" className="mb-6 h-6" />
+        <div className="mb-6 flex items-center gap-2">
+          <img src="/brand/logo-inbest.png" alt="iNBest" className="h-6" />
+          <span className="text-sm font-semibold tracking-tight text-ink-2">Orkesta</span>
+        </div>
         <div className="mb-1 flex items-center gap-2 text-lg font-semibold"><Lock size={18} />Password-protected plan</div>
         <p className="mb-4 text-sm text-muted">{viewOnly ? 'Enter the password you were given to view this plan.' : 'Enter the password to open your editable copy of this plan.'}</p>
         <input type="password" autoFocus className="input" placeholder="Password" value={password} onChange={(e) => { setPassword(e.target.value); setWrong(false) }} />

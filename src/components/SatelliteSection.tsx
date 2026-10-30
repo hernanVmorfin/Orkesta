@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Search, MapPin, Move, X } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
-import { anchorFor, planToLatLng, searchPlaces, type Place } from '../lib/geo'
+import { anchorFor, GEOCODER_NAME, planToLatLng, searchPlaces, type Place } from '../lib/geo'
 import { requestFit } from '../lib/canvas'
 import type { GeoAnchor } from '../types'
 
@@ -67,7 +67,7 @@ export function SatelliteSection() {
           ))}
         </ul>
       )}
-      <p className="text-[11px] text-muted">Search by OpenStreetMap. The venue is centered on the place you pick.</p>
+      <p className="text-[11px] text-muted">Search by {GEOCODER_NAME}. The venue is centered on the place you pick.</p>
     </>
   )
 

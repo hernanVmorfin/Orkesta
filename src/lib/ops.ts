@@ -100,6 +100,9 @@ const addMinutes = (hhmm: string, m: number) => {
 export const entrances = (plan: Plan) => plan.elements.filter((e) => calcOf(e) === 'throughput' && !e.hidden)
   .map((e) => ({ e, per15: Math.max(0, calcInputs(e).per15 ?? 0) }))
 
+/** Meters of queue line (stanchions) drawn on the plan, on every level: the room the queue has to fit in. */
+export const queueLineM = (plan: Plan) => plan.elements.filter((e) => e.kind === 'queue-line' && !e.hidden).reduce((n, e) => n + lengthOf(e), 0)
+
 /**
  * Queue per 15-minute slot: queue = max(0, previous + arrivals − capacity); the longest wait is the
  * queue divided by capacity; a queue holds about 4 people per meter. Runs on until the queue clears.

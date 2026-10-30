@@ -171,7 +171,7 @@ export async function exportPdf(svg: SVGSVGElement, plan: Plan, opts: ExportOpti
     if (list.length > room) { pdf.setFontSize(8); pdf.setTextColor(150, 165, 185); pdf.text(`+ ${list.length - room + 1} more types (see page 2)`, x + 14, y) }
   }
   pdf.setFontSize(7); pdf.setTextColor(150, 165, 185)
-  pdf.text('Generated with iNBest Floorplan · inbest.cloud', x + 8, H - M - 6)
+  pdf.text('Generated with Orkesta by iNBest · inbest.cloud', x + 8, H - M - 6)
 
   summaryPage(pdf, plan, levelId, opts)
   pdf.save(`${plan.name.replace(/\W+/g, '-')}${opts.subtitle ? '-filtered' : ''}-floorplan.pdf`)

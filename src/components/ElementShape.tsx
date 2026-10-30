@@ -142,6 +142,14 @@ function DrawnShape({ e, showLabels }: { e: PlanElement; showLabels: boolean }) 
   )
 }
 
+/** Dark fills get white icons. */
+function isDark(hex: string) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+  if (!m) return false
+  const [r, g, b] = m.slice(1).map((x) => parseInt(x, 16))
+  return 0.299 * r + 0.587 * g + 0.114 * b < 150
+}
+
 export const ElementShape = memo(function ElementShape({ e, tag, used, showLabels, highlight }: Props) {
   const c = CATALOG[e.kind]
   const shape = c?.shape ?? 'rect'
@@ -156,6 +164,9 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
     )
   }
 
+  // Custom objects can carry an icon on top of their box or circle
+  const Badge = shape !== 'icon' && c?.icon ? ICONS[c.icon] : undefined
+  const badge = !!Badge
   let body: React.ReactNode
   switch (shape) {
     case 'roundTable': {
@@ -195,7 +206,7 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
       body = (
         <>
           <ellipse rx={e.w / 2} ry={e.h / 2} fill={color} fillOpacity={e.style?.fillOpacity ?? 0.9} />
-          {showLabels && Math.min(e.w, e.h) > 0.6 && (
+          {showLabels && !badge && Math.min(e.w, e.h) > 0.6 && (
             <text textAnchor="middle" dominantBaseline="middle" fontFamily={FONT} fontSize={Math.min(0.6, Math.min(e.w, e.h) * 0.22)}
               fill="#0a1729" stroke="#ffffff" strokeWidth={0.05} paintOrder="stroke" transform={`rotate(${-e.rotation})`}>{e.label}</text>
           )}
@@ -243,7 +254,7 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
         <>
           <rect x={-e.w / 2} y={-e.h / 2} width={e.w} height={e.h} rx={Math.min(e.w, e.h) * 0.08}
             fill={color} fillOpacity={e.style?.fillOpacity ?? (shape === 'line' ? 1 : 0.9)} />
-          {showLabels && shape !== 'line' && e.kind !== 'chair' && Math.min(e.w, e.h) > 0.35 && (
+          {showLabels && !badge && shape !== 'line' && e.kind !== 'chair' && Math.min(e.w, e.h) > 0.35 && (
             <text textAnchor="middle" dominantBaseline="middle" fontFamily={FONT} fontSize={fs}
               fill={dark ? '#eaf1fa' : '#0a1729'} transform={vertical ? 'rotate(-90)' : undefined}>{e.label}</text>
           )}
@@ -252,7 +263,11 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
     }
   }
 
-  const outerLabel = showLabels && (shape === 'icon' || (shape === 'rect' && Math.min(e.w, e.h) <= 0.35)) && (
+  const bs = Math.min(e.w, e.h) * 0.6
+  const badgeEl = Badge && (
+    <Badge x={-bs / 2} y={-bs / 2} width={bs} height={bs} color={isDark(color) ? '#ffffff' : '#0a1729'} strokeWidth={2} transform={`rotate(${-e.rotation})`} />
+  )
+  const outerLabel = showLabels && (shape === 'icon' || badge || (shape === 'rect' && Math.min(e.w, e.h) <= 0.35)) && (
     <text y={(shape === 'icon' ? e.w / 2 : e.h / 2) + 0.38} textAnchor="middle" fontFamily={FONT} fontSize={0.3}
       fill="#1c2638" stroke="#ffffff" strokeWidth={0.08} paintOrder="stroke" transform={`rotate(${-e.rotation})`}>{e.label}</text>
   )
@@ -262,6 +277,7 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
       style={{ cursor: e.locked ? 'default' : 'move' }}>
       {highlight && <circle r={Math.max(e.w, e.h) / 2 + 1} fill="#1ea7e8" fillOpacity={0.18} className="no-export" />}
       {body}
+      {badgeEl}
       {outerLabel}
     </g>
   )

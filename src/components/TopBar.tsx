@@ -60,6 +60,7 @@ export function TopBar() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-bg-2 bg-white px-3">
       <img src="/brand/logo-inbest.png" alt="iNBest" className="h-6" />
+      <span className="hidden text-sm font-semibold tracking-tight text-ink-2 xl:block">Orkesta</span>
       <div className="mx-2 hidden h-6 w-px bg-bg-2 lg:block" />
       <div className="min-w-0">
         <input value={s.plan.name} disabled={s.viewOnly}

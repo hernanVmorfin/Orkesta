@@ -167,3 +167,5 @@ turning a live link off stops it working immediately.
 - If a step fails, paste the error, not your keys.
 - After Prompt 2, test with a second person on a different network before moving on.
 - Pushing `main` deploys to Azure. Merge server work to `main` only when you want it live.
+- Keep `npm test` passing: the deploy runs it and stops on a failure. Add tests for the server's role rules too.
+- The app is cached for offline use by a service worker. After a deploy, open users see a "new version" banner; test that a server change and an older cached app still work together for a few minutes.

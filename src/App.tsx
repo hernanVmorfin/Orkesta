@@ -11,6 +11,7 @@ import { requestFit } from './lib/canvas'
 import { toast as showToast } from './lib/toast'
 import { selectableIds } from './lib/levels'
 import { Dialogs } from './components/dialogs/Dialogs'
+import { applyUpdate } from './lib/pwa'
 import { PasswordGate } from './components/PasswordGate'
 import { MOBILE_QUERY, useIsMobile, useIsWide } from './lib/useMediaQuery'
 
@@ -23,6 +24,7 @@ export default function App() {
   const isMobile = useIsMobile()
   const wide = useIsWide()
   const [toast, setToast] = useState<string | null>(null)
+  const [updateReady, setUpdateReady] = useState(false)
 
   useEffect(() => {
     // Taken before anything awaits, so a second run of this effect can't use it again
@@ -42,8 +44,10 @@ export default function App() {
       clearTimeout(t)
       t = setTimeout(() => setToast(null), Math.max(2200, msg.length * 60))
     }
+    const onUpdate = () => setUpdateReady(true)
     window.addEventListener('fp:toast', onToast)
-    return () => window.removeEventListener('fp:toast', onToast)
+    window.addEventListener('fp:update', onUpdate)
+    return () => { window.removeEventListener('fp:toast', onToast); window.removeEventListener('fp:update', onUpdate) }
   }, [])
 
   // Selecting something on the canvas jumps to the inspector unless the user is managing guests
@@ -132,6 +136,13 @@ export default function App() {
         </div>
       )}
       <Dialogs />
+      {updateReady && (
+        <div role="status" className={`fixed left-4 z-50 flex items-center gap-3 rounded-xl bg-ink px-4 py-2.5 text-sm text-on-ink shadow-lg ${isMobile ? 'bottom-24 right-4' : 'bottom-6'}`}>
+          <span className="flex-1">A new version of Orkesta is ready.</span>
+          <button className="font-semibold text-accent-on-dark" onClick={() => void applyUpdate()}>Reload</button>
+          <button className="text-on-ink/60" aria-label="Later" onClick={() => setUpdateReady(false)}>Later</button>
+        </div>
+      )}
       {toast && (
         <div className={`fixed left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-center text-sm text-on-ink shadow-lg ${isMobile ? 'bottom-24' : 'bottom-6'}`}>
           {toast}

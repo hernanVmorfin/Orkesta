@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, RotateCcw, Trash2, X } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { activeLevel, BASE_LEVEL } from '../lib/levels'
@@ -17,7 +17,11 @@ export function CommentsLayer({ readOnly, width }: { readOnly: boolean; width: n
   const active = list.find((c) => c.id === s.activeComment)
   const popAt = (x: number, y: number) => {
     const p = screen(x, y)
-    return p.left + 320 > width ? { left: p.left - 300, top: p.top - 12 } : { left: p.left + 18, top: p.top - 12 }
+    const left = p.left + 320 > width ? p.left - 300 : p.left + 18
+    // The popover is 288 px wide; on a phone it may not fit beside the pin, so it slides under it instead
+    return left < 8 || left + 296 > width
+      ? { left: Math.max(8, Math.min(width - 296, p.left - 144)), top: p.top + 8 }
+      : { left, top: p.top - 12 }
   }
 
   return (
@@ -42,12 +46,15 @@ export function CommentsLayer({ readOnly, width }: { readOnly: boolean; width: n
 function Draft({ style, pin }: { style: React.CSSProperties; pin: { left: number; top: number } }) {
   const s = usePlanStore()
   const [body, setBody] = useState('')
+  const box = useRef<HTMLTextAreaElement>(null)
+  // The click that opened the draft would take focus back as it finishes, so focus once it has
+  useEffect(() => { const t = setTimeout(() => box.current?.focus(), 0); return () => clearTimeout(t) }, [])
   const post = () => { if (body.trim() && s.commentDraft) s.addComment(s.commentDraft, body.trim()) }
   return (
     <>
       <div className="absolute z-10 h-7 w-7 -translate-x-1/2 -translate-y-full rounded-full rounded-bl-none bg-accent shadow-md ring-2 ring-white" style={pin} />
       <div className="absolute z-20 w-72 rounded-xl border border-bg-2 bg-white p-3 shadow-xl" style={style}>
-        <textarea autoFocus className="input h-20 py-1" placeholder="Add a comment for the team…" value={body} maxLength={1000}
+        <textarea ref={box} className="input h-20 py-1" placeholder="Add a comment for the team…" value={body} maxLength={1000}
           onChange={(e) => setBody(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); post() } if (e.key === 'Escape') s.set({ commentDraft: null }) }} />
         <div className="mt-2 flex justify-end gap-1">

@@ -217,7 +217,7 @@ export const CATALOG: Record<string, CatalogItem> = Object.fromEntries(
 /** Makes an event's custom objects known to the catalog (they travel with the plan). */
 export function registerCustomItems(items: CustomItem[] | undefined) {
   for (const c of items ?? []) {
-    CATALOG[c.kind] = { kind: c.kind, name: c.name, layer: c.layer, shape: c.round ? 'circle' : 'rect', w: c.w, h: c.h, color: c.color }
+    CATALOG[c.kind] = { kind: c.kind, name: c.name, layer: c.layer, shape: c.round ? 'circle' : 'rect', w: c.w, h: c.h, color: c.color, icon: c.icon }
   }
 }
 
