@@ -1,4 +1,5 @@
 import type { Plan } from '../../types'
+import type { ProfilePatch } from '../profile'
 
 /**
  * Everything the app needs from a server: sign-in, shared events, per-event people and roles, staff groups and
@@ -9,13 +10,30 @@ import type { Plan } from '../../types'
 /** Per event. Admins edit the plan, manage people and send messages; staff view, check guests in and read messages. */
 export type Role = 'admin' | 'staff'
 
-export interface Account { id: string; email: string; name: string }
+export interface Account {
+  id: string
+  email: string
+  name: string
+  title?: string
+  company?: string
+  phone?: string
+  color?: string
+  photo?: string
+  /** when the person last saved their profile; missing until they've set it up */
+  setupAt?: number
+}
 
 export interface Member {
   userId: string
   name: string
+  title?: string
+  company?: string
+  color?: string
+  photo?: string
   /** only returned to admins */
   email?: string
+  /** only returned to admins */
+  phone?: string
   role: Role
   joinedAt: number
 }
@@ -81,6 +99,12 @@ export interface Backend {
   /** A real server may redirect to its sign-in page and back; the test backend signs in its test owner. */
   signIn(): Promise<void>
   signOut(): Promise<void>
+  /**
+   * Saves your own name, title, company, phone and avatar (rules in lib/profile: `cleanProfile`) and marks
+   * the profile as set up. Returns the updated account. Email changes need a confirmation link, so they
+   * aren't part of this.
+   */
+  updateProfile(patch: ProfilePatch): Promise<Account>
 
   /**
    * Creates the shared event (the caller becomes its admin) or updates it (admins only). `baseUpdatedAt` is the

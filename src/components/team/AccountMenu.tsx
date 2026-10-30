@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Check, LogIn, LogOut, UserRound } from 'lucide-react'
+import { Check, LogIn, LogOut, UserRound, UserPen } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { signIn, signOut, switchTestUser, testUsers } from '../../store/team'
 import { Avatar } from './Avatar'
+import { subtitle } from '../../lib/profile'
 
 /** Who's signed in, their role in the open event, sign in/out, and (test mode) switching accounts. */
 export function AccountCard({ onDone }: { onDone?: () => void }) {
@@ -31,13 +32,20 @@ export function AccountCard({ onDone }: { onDone?: () => void }) {
   return (
     <div>
       <div className="flex items-center gap-3 p-3 pb-2">
-        <Avatar name={account.name} dark />
+        <Avatar name={account.name} id={account.id} color={account.color} photo={account.photo} size="md" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-ink">{account.name}</div>
+          {subtitle(account) && <div className="truncate text-xs text-ink-2">{subtitle(account)}</div>}
           <div className="truncate text-xs text-muted">{account.email}</div>
         </div>
       </div>
-      <p className="px-3 pb-3 text-xs text-ink-2">{roleText}</p>
+      <p className="px-3 pb-2 text-xs text-ink-2">{roleText}</p>
+      <div className="border-t border-bg-2 p-1">
+        <button className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-bg pointer-coarse:min-h-11"
+          onClick={() => { onDone?.(); usePlanStore.setState({ dialog: 'profile' }) }}>
+          <UserPen size={15} className="text-muted" />Your profile…
+        </button>
+      </div>
       {mode === 'mock' && (
         <div className="border-t border-bg-2 p-1">
           <div className="eyebrow px-2 pb-1 pt-2">Test mode · see the app as</div>
@@ -69,7 +77,7 @@ export function AccountMenu() {
     <div className="relative shrink-0">
       <button title={account ? `${account.name} (account)` : 'Sign in'} onClick={() => setOpen(!open)}
         className="relative grid h-8 w-8 place-items-center rounded-full text-ink-2 hover:bg-bg-2 pointer-coarse:h-10 pointer-coarse:w-10">
-        {account ? <Avatar name={account.name} dark /> : <UserRound size={18} />}
+        {account ? <Avatar name={account.name} id={account.id} color={account.color} photo={account.photo} /> : <UserRound size={18} />}
         {mode === 'mock' && <span className="absolute -bottom-1 -right-1.5 rounded bg-amber-300 px-0.5 font-mono text-[8px] font-bold leading-3 text-ink">TEST</span>}
       </button>
       {open && (

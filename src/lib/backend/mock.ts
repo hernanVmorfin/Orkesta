@@ -5,6 +5,7 @@ import {
   type Account, type Backend, type EventStatus, type Invite, type Member, type Message, type NewMessage,
   type ReadReceipt, type Role, type SharedEventInfo, type StaffGroup,
 } from './types'
+import { applyProfile, cleanProfile, type ProfilePatch } from '../profile'
 
 /**
  * In-browser stand-in for a server, so people, invites and messages can be tried before one exists. It applies the
@@ -135,6 +136,16 @@ export class MockBackend implements Backend {
   }
   async signIn() { this.setUser(OWNER.id) }
   async signOut() { this.setUser(null) }
+  async updateProfile(patch: ProfilePatch) {
+    const clean = cleanProfile(patch)
+    if (!clean.ok) throw new BackendError(400, clean.error)
+    return this.change((s, me) => {
+      const i = s.users.findIndex((u) => u.id === me.id)
+      if (i < 0) throw new BackendError(401, 'Sign in first.')
+      s.users[i] = { ...applyProfile(s.users[i], clean.patch), setupAt: Date.now() }
+      return s.users[i]
+    })
+  }
   testUsers() { return this.state.users }
   async switchUser(userId: string) { this.setUser(userId) }
 
@@ -219,7 +230,12 @@ export class MockBackend implements Backend {
     const { e, role } = access(this.state, eventId, this.me().id)
     return e.members.map((m) => {
       const u = userOf(this.state, m.userId)
-      return { userId: m.userId, name: u?.name ?? 'Unknown', role: m.role, joinedAt: m.joinedAt, ...(role === 'admin' ? { email: u?.email } : {}) }
+      return {
+        userId: m.userId, name: u?.name ?? 'Unknown', role: m.role, joinedAt: m.joinedAt,
+        title: u?.title, company: u?.company, color: u?.color, photo: u?.photo,
+        // Contact details only for admins
+        ...(role === 'admin' ? { email: u?.email, phone: u?.phone } : {}),
+      }
     })
   }
 

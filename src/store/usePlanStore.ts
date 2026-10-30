@@ -59,7 +59,7 @@ interface State {
   /** Level being shown; null = the first */
   levelId: string | null
   /** Modal dialogs opened from menus */
-  dialog: 'repeat' | 'seatBlock' | 'newEvent' | 'schedule' | 'history' | 'customItem' | 'export' | null
+  dialog: 'repeat' | 'seatBlock' | 'newEvent' | 'profile' | 'welcome' | 'schedule' | 'history' | 'customItem' | 'export' | null
   showComments: boolean
   showResolved: boolean
   /** Open comment thread, or a new comment being written at a point */

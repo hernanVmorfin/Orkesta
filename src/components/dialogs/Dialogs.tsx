@@ -6,6 +6,7 @@ const RepeatDialog = lazy(() => import('./LayoutDialogs').then((m) => ({ default
 const SeatBlockDialog = lazy(() => import('./LayoutDialogs').then((m) => ({ default: m.SeatBlockDialog })))
 const ScheduleDialog = lazy(() => import('./OpsDialogs').then((m) => ({ default: m.ScheduleDialog })))
 const FilteredExportDialog = lazy(() => import('./OpsDialogs').then((m) => ({ default: m.FilteredExportDialog })))
+const ProfileDialog = lazy(() => import('../team/ProfileDialog').then((m) => ({ default: m.ProfileDialog })))
 const NewEventDialog = lazy(() => import('./NewEventDialog').then((m) => ({ default: m.NewEventDialog })))
 const CustomItemDialog = lazy(() => import('./LibraryDialogs').then((m) => ({ default: m.CustomItemDialog })))
 const HistoryDialog = lazy(() => import('./HistoryDialog').then((m) => ({ default: m.HistoryDialog })))
@@ -23,6 +24,8 @@ export function Dialogs() {
       case 'schedule': return <ScheduleDialog onClose={close} />
       case 'export': return <FilteredExportDialog onClose={close} />
       case 'newEvent': return <NewEventDialog onClose={close} start={start} />
+      case 'profile': return <ProfileDialog onClose={close} />
+      case 'welcome': return <ProfileDialog onClose={close} welcome />
       case 'customItem': return <CustomItemDialog onClose={close} />
       case 'history': return <HistoryDialog onClose={close} />
       default: return null

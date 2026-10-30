@@ -4,6 +4,7 @@ import * as db from '../lib/db'
 import { toast } from '../lib/toast'
 import { requestFocus } from '../lib/canvas'
 import { isTableKind } from '../lib/catalog'
+import type { ProfilePatch } from '../lib/profile'
 import {
   BackendError, getBackend,
   type Backend, type EventStatus, type Message, type MessagePin, type NewMessage, type ReadReceipt, type Role,
@@ -268,6 +269,9 @@ function requestSync(): Promise<void> {
 }
 
 function refreshAll() {
+  // Your own profile may have been edited in another tab
+  const a = backend?.account() ?? null
+  if (a && a.id === state().account?.id && JSON.stringify(a) !== JSON.stringify(state().account)) setState({ account: a })
   void requestSync()
   void refreshMessages()
   void refreshPeople()
@@ -303,6 +307,30 @@ async function accountChanged() {
     messages: [], people: null, sharedEvents: [], syncState: 'idle',
   })
   await Promise.all([requestSync(), refreshMessages(), refreshPeople(), refreshSharedList()])
+}
+
+/** Saves your profile; names, avatars and team lists update everywhere. Throws with a message to show. */
+export async function updateProfile(patch: ProfilePatch) {
+  if (!backend) throw new Error('Not connected yet. Try again in a moment.')
+  try {
+    const account = await backend.updateProfile(patch)
+    setState({ account })
+    void refreshPeople()
+    return account
+  } catch (err) {
+    throw new Error(errorText(err), { cause: err })
+  }
+}
+
+/** Whether to offer the welcome profile step: signed in, never set up, and not skipped on this device. */
+export function needsProfileSetup() {
+  const a = state().account
+  if (!a || a.setupAt || state().linkViewOnly) return false
+  try { return !localStorage.getItem(`orkesta:profileLater:${a.id}`) } catch { return false }
+}
+export function skipProfileSetup() {
+  const a = state().account
+  if (a) try { localStorage.setItem(`orkesta:profileLater:${a.id}`, String(Date.now())) } catch { /* storage unavailable */ }
 }
 
 export async function signIn() {
