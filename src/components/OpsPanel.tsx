@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronRight, TriangleAlert, Download, CalendarClock, MapPin } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { DEFAULT_SAFETY, safetyOf } from '../lib/calcs'
-import { DEFAULT_ARRIVAL, arrivalModel, clashes, egress, entrances, exitBlockers, inventory, powerBudget, scheduleItems } from '../lib/ops'
+import { arrivalModel, arrivalOf, expectedCrowd, clashes, egress, entrances, exitBlockers, inventory, powerBudget, scheduleItems } from '../lib/ops'
 import { activeLevel, levelsOf } from '../lib/levels'
 import { requestFocus } from '../lib/canvas'
 import { download } from '../lib/csv'
@@ -29,7 +29,10 @@ const Warn = ({ children }: { children: React.ReactNode }) => (
 const fmtMin = (m: number) => {
   if (!Number.isFinite(m)) return '–'
   const s = Math.round(m * 60)
-  return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`
+  if (s < 60) return `${s} s`
+  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')} s`
+  const min = Math.round(s / 60)
+  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`
 }
 
 /** Jumps to an object: shows its level, selects it and centers the view on it. */
@@ -136,11 +139,11 @@ function ArrivalSection() {
   const s = usePlanStore()
   const show = useShow()
   const ro = s.viewOnly
-  const model = s.plan.arrival ?? DEFAULT_ARRIVAL
+  const model = arrivalOf(s.plan)
   const ents = entrances(s.plan)
   const { rows, capacity } = arrivalModel(s.plan)
   const setModel = (m: ArrivalModel, record = true) => s.mutate((p) => ({ ...p, arrival: m }), record)
-  const [total, setTotal] = useState(1000)
+  const [total, setTotal] = useState(() => expectedCrowd(s.plan) || 1000)
   const [mins, setMins] = useState(60)
   const peak = rows.reduce((a, b) => (b.queue > a.queue ? b : a), rows[0] ?? { queue: 0, waitMin: 0, lengthM: 0, time: '' })
   const cleared = rows.find((r, i) => i >= model.slots.length - 1 && r.queue === 0)

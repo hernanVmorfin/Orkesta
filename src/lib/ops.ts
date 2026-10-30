@@ -28,11 +28,17 @@ export interface Egress {
   minutes: number
 }
 
+const seatsIn = (els: PlanElement[]) => els.reduce((n, e) => n + (isTableKind(e.kind) ? e.seats ?? 0 : e.kind === 'chair' ? 1 : 0), 0)
+const standingIn = (els: PlanElement[]) => els.filter((e) => calcOf(e) === 'crowd').reduce((n, e) => n + crowdCapacity(e), 0)
+
+/** Expected attendance across all levels: the crowd size when set, else seats plus standing capacity. */
+export const expectedCrowd = (plan: Plan) => safetyOf(plan).crowdSize ?? seatsIn(plan.elements) + standingIn(plan.elements)
+
 export function egress(plan: Plan, levelId: string | null): Egress {
   const els = onShownLevel(plan, levelId)
   const safety = safetyOf(plan)
-  const seats = els.reduce((n, e) => n + (isTableKind(e.kind) ? e.seats ?? 0 : e.kind === 'chair' ? 1 : 0), 0)
-  const standing = els.filter((e) => calcOf(e) === 'crowd').reduce((n, e) => n + crowdCapacity(e), 0)
+  const seats = seatsIn(els)
+  const standing = standingIn(els)
   const exits = els.filter((e) => calcOf(e) === 'exit' && !e.hidden).map((e) => ({ e, flow: exitFlow(e, plan) }))
   const total = exits.reduce((n, x) => n + x.flow, 0)
   const widest = safety.worstCase && exits.length ? exits.reduce((a, b) => (b.flow > a.flow ? b : a)) : null
@@ -68,6 +74,19 @@ export function exitBlockers(plan: Plan, levelId: string | null) {
 // ---- Arrivals ---------------------------------------------------------------
 
 export const DEFAULT_ARRIVAL: ArrivalModel = { start: '18:00', slots: [100, 250, 400, 300, 150] }
+/** Typical arrival curve over the first hour and a quarter, as weights per 15 minutes. */
+const ARRIVAL_CURVE = [1, 2.5, 4, 3, 1.5]
+
+/** The plan's arrival model, or the typical curve scaled to the expected crowd until one is entered. */
+export function arrivalOf(plan: Plan): ArrivalModel {
+  if (plan.arrival) return plan.arrival
+  const crowd = expectedCrowd(plan)
+  if (!crowd) return DEFAULT_ARRIVAL
+  const sum = ARRIVAL_CURVE.reduce((a, b) => a + b, 0)
+  const slots = ARRIVAL_CURVE.map((w) => Math.floor((crowd * w) / sum))
+  slots[2] += crowd - slots.reduce((a, b) => a + b, 0)
+  return { ...DEFAULT_ARRIVAL, slots }
+}
 
 export interface ArrivalRow { time: string; arrivals: number; capacity: number; queue: number; waitMin: number; lengthM: number }
 
@@ -86,7 +105,7 @@ export const entrances = (plan: Plan) => plan.elements.filter((e) => calcOf(e) =
  * queue divided by capacity; a queue holds about 4 people per meter. Runs on until the queue clears.
  */
 export function arrivalModel(plan: Plan): { rows: ArrivalRow[]; capacity: number } {
-  const model = plan.arrival ?? DEFAULT_ARRIVAL
+  const model = arrivalOf(plan)
   const capacity = entrances(plan).reduce((n, x) => n + x.per15, 0)
   const rows: ArrivalRow[] = []
   let q = 0

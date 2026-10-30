@@ -4,6 +4,7 @@ import { CATALOG, isTableKind } from '../lib/catalog'
 import { blankPlan } from './blankPlan'
 import { seatBlock } from '../lib/layouts'
 import { normalize } from '../lib/shapes'
+import { DEFAULT_SAFETY } from '../lib/calcs'
 
 /**
  * Starter layouts that open as a new, editable event. Built from catalog objects so sizes stay
@@ -55,13 +56,15 @@ export const TEMPLATES: Template[] = [
       const d: Draft[] = [
         el('stage', 20, 3), el('screen', 9, 1.5, { label: 'LED screen L' }), el('screen', 31, 1.5, { label: 'LED screen R' }), el('podium', 23.5, 3),
         el('dance-floor', 20, 9.5, { w: 8, h: 6 }),
-        el('bar', 2.5, 15, { label: 'Bar 1' }), el('bar', 37.5, 15, { label: 'Bar 2' }),
-        el('foh', 20, 28), el('registration', 6, 28.4), el('registration', 34, 28.4),
-        el('firstaid', 38.6, 22), el('extinguisher', 1.2, 8), el('extinguisher', 38.8, 8),
-        el('generator', 36, 26.5, { setup: { vendor: 'Power Co', zone: 'Back of house' } }),
+        el('bar', 1.5, 15, { label: 'Bar 1' }), el('bar', 38.5, 15, { label: 'Bar 2' }),
+        el('foh', 20, 27.5), el('registration', 8, 29.3), el('registration', 32, 29.3),
+        el('firstaid', 38.6, 10), el('extinguisher', 1.2, 8), el('extinguisher', 38.8, 8),
+        el('generator', 38.9, 22, { rotation: 90, setup: { vendor: 'Power Co', zone: 'Back of house' } }),
         ...exits(40, 30),
       ]
-      for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) d.push(el('round-10', 8 + c * 6, 15 + r * 3.6 + (c % 2 ? 1.2 : 0)))
+      // Tables 4.8 m apart leave a 1.5 m aisle between chairs; a center aisle runs from the doors to the dance floor
+      d.push(el('round-10', 11, 9.5), el('round-10', 29, 9.5))
+      for (const y of [15.8, 20.6, 25.4]) for (const x of [6.2, 11, 15.8, 24.2, 29, 33.8]) d.push(el('round-10', x, y))
       return finish(p, d)
     },
   },
@@ -71,7 +74,7 @@ export const TEMPLATES: Template[] = [
       const p = { ...blankPlan(), name: 'Conference', widthM: 32, heightM: 26 }
       const block = { style: 'theatre' as const, rows: 12, perRow: 20, seatW: 0.5, rowGap: 0.9, aisleEvery: 10, aisleW: 1.4, perTable: 3 }
       const d: Draft[] = [
-        el('stage', 16, 3, { w: 10, h: 4 }), el('podium', 19, 3.5), el('screen', 6, 1.5), el('screen', 26, 1.5),
+        el('stage', 16, 3, { w: 10, h: 4 }), el('podium', 19, 3.5), el('screen', 7, 1.5), el('screen', 25, 1.5),
         el('camera', 16, 19.5), el('foh', 16, 21),
         el('registration', 8, 24.6), el('registration', 12, 24.6), el('registration', 20, 24.6),
         el('coffee', 2.5, 18, { rotation: 90 }), el('coffee', 29.5, 18, { rotation: 90 }),
@@ -100,26 +103,29 @@ export const TEMPLATES: Template[] = [
     build: () => {
       const p = { ...blankPlan(), name: 'Wedding', widthM: 30, heightM: 24 }
       const d: Draft[] = [
-        el('head-table', 15, 2.5), el('dance-floor', 15, 8.5), el('dj-booth', 22, 6),
-        el('cake-table', 8, 6.5), el('gift-table', 27.5, 21), el('photo-booth', 27, 3), el('bar', 1.5, 12),
+        el('head-table', 15, 2.5), el('dance-floor', 15, 10), el('dj-booth', 22, 3),
+        el('cake-table', 8, 3.5), el('gift-table', 24, 21.5), el('photo-booth', 28.5, 17), el('bar', 1.5, 17),
         el('flower-arch', 15, 22.5), el('registration', 15, 23.3, { label: 'Welcome table' }),
         ...exits(30, 24),
       ]
-      for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) d.push(el('round-8', 6 + c * 6, 13.5 + r * 3.4))
+      // Two tables deep on each side of the dance floor, four across the back
+      for (const y of [8, 12.5]) for (const x of [4.5, 9, 21, 25.5]) d.push(el('round-8', x, y))
+      for (const x of [6.75, 11.25, 18.75, 23.25]) d.push(el('round-8', x, 17))
       return finish(p, d)
     },
   },
   {
-    id: 'expo', name: 'Expo', description: '24 booths of 3 × 3 m in two double rows, 3 m aisles, info desk · 40 × 30 m',
+    id: 'expo', name: 'Expo', description: '24 booths of 3 × 3 m in two double rows, 3 m aisles, info desk, 600 visitors · 40 × 30 m',
     build: () => {
-      const p = { ...blankPlan(), name: 'Expo', widthM: 40, heightM: 30 }
+      // Booths seat nobody, so the expected crowd drives the evacuation and arrival figures
+      const p: Plan = { ...blankPlan(), name: 'Expo', widthM: 40, heightM: 30, safety: { ...DEFAULT_SAFETY, crowdSize: 600 } }
       const booths: Draft[] = []
       for (const y0 of [6, 18]) for (const row of [0, 1]) for (let c = 0; c < 6; c++) {
         booths.push(el('booth-3x3', 7.5 + c * 3 + (c >= 3 ? 7 : 0), y0 + row * 3, { label: `Booth ${booths.length + 1}` }))
       }
       const d: Draft[] = [
         el('info-desk', 20, 27), el('registration', 15, 28.4), el('registration', 25, 28.4), el('badge-print', 20, 28.6),
-        el('coffee', 3, 15, { rotation: 90 }), el('toilet-block', 36, 3, { rotation: 0 }),
+        el('coffee', 3, 15, { rotation: 90 }), el('toilet-block', 36.5, 10, { rotation: 90 }),
         el('mains', 39.2, 15, { setup: { zone: 'Hall' } }),
         ...exits(40, 30),
       ]

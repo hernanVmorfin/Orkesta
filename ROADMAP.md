@@ -80,6 +80,13 @@ These are real problems in the current code. Fix them before adding features.
 
 Everything valuable in OnePlan's venue tools (calculators, routes, fence counts, area capacities) depends on objects drawn as real lines and areas. Orkesta's model is only a centre point plus width × height, so build this first.
 
+**Status (2026-10-30): done on `feature/venue-tools`, tested in the browser.**
+- Built as planned, with a few differences:
+  - Drawing starts from the "Lines & areas" library group, not an L shortcut.
+  - Points are stored relative to the object's centre, so move, rotate and duplicate work unchanged.
+  - Calculators are keyed by `calc` instead of `blocks`.
+- Old box barriers, fences and walls stay hidden in the library so existing plans still open.
+
 ### Data model
 
 Extend `src/types.ts`:
@@ -128,6 +135,16 @@ Done when: you can draw a 120 m barrier line and see its length and segment coun
 
 ## 5. Phase 2: calculators and logistics (the venue-event value, about 1.5–2 weeks)
 
+**Status (2026-10-30): done on `feature/venue-tools`, tested in the browser.**
+- The figures live in a new **Ops** tab (Evacuation, Arrivals, Power, Load-in schedule, Inventory) and on a second PDF page.
+- Differences from the plan:
+  - Barrier sections round up (`ceil`), so the line is fully covered.
+  - Posts and cones are `floor(length ÷ spacing) + 1`.
+  - Until arrivals are entered, the expected crowd is spread over 75 minutes.
+- Not built:
+  - the "+1 spare" toggle (the hint says to add spares);
+  - the warning when a queue won't fit the space in front of a desk.
+
 ### 5.1 Calculator framework
 
 Add `blocks?: Record<BlockId, unknown>` to `PlanElement`. Each block has a typed schema (inputs, defaults, read-only outputs), rendered as a section in the Inspector. Outputs recompute from the geometry, so moving a point updates the numbers. **M**
@@ -175,6 +192,16 @@ OnePlan's arrival and exit calculators are standalone websites that know nothing
 
 ## 6. Phase 3: venue structure and library (about 1–1.5 weeks)
 
+**Status (2026-10-30): done on `feature/venue-tools`.**
+- Built:
+  - levels;
+  - folders with show and lock;
+  - cell references;
+  - four library packs;
+  - custom objects: name, size, colour, round or rectangular, layer;
+  - five templates (Gala, Conference, Cocktail, Wedding, Expo). Each opens with clear aisles, unblocked exits and realistic Ops figures.
+- Not built: an icon picker for custom objects.
+
 1. **Levels/rooms per event** (Ballroom, Foyer, Terrace, Floor 2): each has its own footprint, basemap and elements, with one guest list across all of them. Includes a level switcher and duplicate level. Data model: `Plan.levels: Level[]` and `PlanElement.levelId`. **M–L**
 2. **Folders/groups** inside layers (e.g. "Sponsor booths"), with show/lock per group and per object in the list. **M**
 3. **Grid cell references**: A–Z by 1–N labels at a chosen cell size (e.g. 5 m), on screen and in exports, so you can say "AED at C4" on the radio. **S**
@@ -189,6 +216,19 @@ OnePlan's arrival and exit calculators are standalone websites that know nothing
 ---
 
 ## 7. Phase 4: collaboration backend (already in PROMPT.md Phase 2)
+
+**Status (2026-10-30):** three items here work without a server and are built on `feature/venue-tools`:
+- **comments:** pins, replies and resolve; they travel with the plan, so team sync carries them;
+- **version history and restore:** stored in this browser;
+- **password-protected links:** encrypted in the browser with AES-GCM.
+
+Everything else in this section still needs the server:
+- live links that always show the latest version;
+- turning links off;
+- vendor viewer roles;
+- @mentions;
+- presence and cursors;
+- live co-editing.
 
 Recommended stack: Supabase (Postgres, Auth, Storage for basemaps, Realtime).
 
@@ -221,6 +261,8 @@ Still open:
 ---
 
 ## 9. Suggested order (next 5 pull requests)
+
+**Status (2026-10-30):** items 1–5 are done, and so are levels and library packs. The backend is next: ROADMAP section 11, "Connecting a real server", and COLLAB_PROMPTS.md.
 
 1. **Hardening:** 0.1 privacy, 0.2 IndexedDB, 0.3 multiple events, 0.5 code-split, 0.6 shortcuts.
 2. **Drawn lines and areas, measurements, styling**: Phase 1, items 1–4.

@@ -140,7 +140,7 @@ export async function exportPdf(svg: SVGSVGElement, plan: Plan, opts: ExportOpti
   pdf.setFontSize(18); pdf.setTextColor(234, 241, 250)
   pdf.text(plan.name, x + 8, y, { maxWidth: side - 16 }); y += 14
   if (opts.subtitle) { pdf.setFontSize(9); pdf.setTextColor(100, 199, 245); pdf.text(opts.subtitle, x + 8, y, { maxWidth: side - 16 }); y += 9 }
-  line('Venue', plan.venue + (multiLevel ? ` · ${level.name}` : ''))
+  line('Venue', [plan.venue, multiLevel ? level.name : ''].filter(Boolean).join(' · '))
   line('Date', plan.date || 'TBD')
   if (tables.length) line('Tables / seats', `${tables.length} tables · ${seats} seats · ${assigned} guests seated`)
   line('Plan scale', `1:${Math.round(1000 / scale)} on A3 · 1 m = ${scale.toFixed(1)} mm`)
@@ -232,7 +232,8 @@ function summaryPage(pdf: jsPDF, plan: Plan, levelId: string | null, opts: Expor
   if (pb.zones.length) block('Power', [['Supply / draw', `${pb.supply} kW / ${pb.draw.toFixed(1)} kW${pb.draw > pb.supply ? ' (short)' : ''}`],
     ...pb.zones.slice(0, 6).map((z) => [z.zone, `${z.supply} / ${z.draw.toFixed(1)} kW`] as [string, string])])
   const vendors = vendorsOf(plan)
-  if (vendors.length) block('Vendors', vendors.slice(0, 12).map((v) => [v, `${plan.elements.filter((e) => e.setup?.vendor?.trim() === v).length} objects`] as [string, string]))
+  const objectsOf = (v: string) => plan.elements.filter((e) => e.setup?.vendor?.trim() === v).length
+  if (vendors.length) block('Vendors', vendors.slice(0, 12).map((v) => [v, `${objectsOf(v)} object${objectsOf(v) === 1 ? '' : 's'}`] as [string, string]))
   pdf.setFontSize(7.5); pdf.setTextColor(91, 101, 118)
   pdf.text('Estimates for planning only. Check evacuation figures against your local fire code and the venue’s approved capacity.', X, 282, { maxWidth: 165 })
 }
