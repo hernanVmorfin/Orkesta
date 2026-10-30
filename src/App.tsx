@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { MobileHub } from './components/mobile/MobileHub'
 import { Hub } from './components/hub/Hub'
 import { usePlanStore } from './store/usePlanStore'
-import { acceptInvite, initTeam, takeInviteToken } from './store/team'
+import { acceptInvite, initTeam, needsProfileSetup, takeInviteToken } from './store/team'
 import { requestFit } from './lib/canvas'
 import { toast as showToast } from './lib/toast'
 import { selectableIds } from './lib/levels'
@@ -23,6 +23,8 @@ export default function App() {
   const isMobile = useIsMobile()
   const [toast, setToast] = useState<string | null>(null)
   const [updateReady, setUpdateReady] = useState(false)
+  const [started, setStarted] = useState(false)
+  const account = usePlanStore((s) => s.account)
 
   useEffect(() => {
     // Taken before anything awaits, so a second run of this effect can't use it again
@@ -31,8 +33,15 @@ export default function App() {
       await usePlanStore.getState().hydrate()
       await initTeam()
       if (invite && await acceptInvite(invite)) usePlanStore.setState({ view: 'editor' })
+      setStarted(true)
     })()
   }, [])
+
+  // Welcome step, once per person: after startup (an invite may still switch who's signed in) and after switching accounts
+  useEffect(() => {
+    if (!started || locked || usePlanStore.getState().dialog) return
+    if (needsProfileSetup()) usePlanStore.setState({ dialog: 'welcome' })
+  }, [started, locked, account?.id, account?.setupAt])
 
   useEffect(() => {
     let t: ReturnType<typeof setTimeout>

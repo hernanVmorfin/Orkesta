@@ -16,6 +16,8 @@ export function Dialogs() {
   const dialog = usePlanStore((s) => s.dialog)
   const set = usePlanStore((s) => s.set)
   const start = usePlanStore((s) => s.newEventStart)
+  // The profile form belongs to whoever is signed in; a new account starts a fresh form
+  const accountId = usePlanStore((s) => s.account?.id)
   const close = () => set({ dialog: null })
   const el = (() => {
     switch (dialog) {
@@ -24,8 +26,8 @@ export function Dialogs() {
       case 'schedule': return <ScheduleDialog onClose={close} />
       case 'export': return <FilteredExportDialog onClose={close} />
       case 'newEvent': return <NewEventDialog onClose={close} start={start} />
-      case 'profile': return <ProfileDialog onClose={close} />
-      case 'welcome': return <ProfileDialog onClose={close} welcome />
+      case 'profile': return <ProfileDialog key={accountId} onClose={close} />
+      case 'welcome': return <ProfileDialog key={accountId} onClose={close} welcome />
       case 'customItem': return <CustomItemDialog onClose={close} />
       case 'history': return <HistoryDialog onClose={close} />
       default: return null

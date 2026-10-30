@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Copy, Link2, Mail, Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react'
+import { Copy, Link2, Mail, Pencil, Phone, Plus, Trash2, UserPlus, X } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { createInvite, deleteGroup, inviteUrl, removeMember, revokeInvite, saveGroup, setMemberRole } from '../../store/team'
 import type { Invite, Member, Role, StaffGroup } from '../../lib/backend'
 import { toast } from '../../lib/toast'
 import { Avatar } from './Avatar'
+import { subtitle } from '../../lib/profile'
 
 const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', staff: 'Staff' }
 const iconBtn = 'rounded p-1.5 text-muted pointer-coarse:p-3'
@@ -105,10 +106,17 @@ function MemberRow({ m, me, admin }: { m: Member; me: boolean; admin: boolean })
   }
   return (
     <li className="flex items-center gap-2 py-1.5">
-      <Avatar name={m.name} />
+      <Avatar name={m.name} id={m.userId} color={m.color} photo={m.photo} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm text-ink">{m.name}{me && <span className="text-muted"> (you)</span>}</div>
-        {m.email && <div className="truncate text-[11px] text-muted">{m.email}</div>}
+        {subtitle(m) && <div className="truncate text-[11px] text-ink-2">{subtitle(m)}</div>}
+        {/* Contact details only reach admins */}
+        {(m.email || m.phone) && (
+          <div className="flex min-w-0 items-center gap-2 text-[11px] text-muted">
+            {m.email && <span className="truncate">{m.email}</span>}
+            {m.phone && <a href={`tel:${m.phone.replace(/[^\d+]/g, '')}`} className="flex shrink-0 items-center gap-0.5 hover:text-accent-deep"><Phone size={11} />{m.phone}</a>}
+          </div>
+        )}
       </div>
       {admin ? (
         <>

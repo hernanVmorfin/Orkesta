@@ -82,6 +82,9 @@ Build, in a new server/ folder with a docker-compose.yml:
    - only admins change the plan, people, groups and messages;
    - staff get guests without emails;
    - staff only see messages to everyone or their groups;
+   - updateProfile (PATCH /me) applies the rules in src/lib/profile.ts (cleanProfile) and sets setupAt;
+     members come back with name, title, company, colour and photo for everyone, and email and
+     phone only for the event's admins;
    - a plan save whose baseUpdatedAt isn't current returns 409;
    - check-ins are stored apart from the plan;
    - a cheap status endpoint (role, plan version, check-ins) for polling;

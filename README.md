@@ -45,6 +45,10 @@ npm test         # unit tests (also run before every deploy)
 - Events are saved in the browser (IndexedDB, including uploaded basemaps), each with a small summary (counts and thumbnail) so the hub never loads whole plans. The top bar shows "Not saved" if the browser blocks storage.
 - Teams (Team tab, desktop and phone): share an event, invite people by email or link, and give each person a role for that event. Admins edit the plan and manage people; staff see the plan and guest details (no emails), check guests in and read messages. Admins message all staff or a group, mark messages urgent (a banner on staff screens) and pin a place on the map, and see who has read each message. See ROADMAP.md section 11.
 - Works offline and installs like an app: once opened, the whole app is cached on the device, so plans, drawings, exports and PDF import keep working without a connection (satellite imagery and place search need one). Install it from the browser ("Add to Home Screen" on phones, the install icon in Chrome or Edge). When a new version is published, a banner offers to reload; nothing reloads mid-edit.
+- Profile (account menu → "Your profile…"): your name, job title, company, phone and an avatar (a photo, cropped and shrunk to a few KB, or initials on a colour you pick). It's how you appear on comments, messages and the People list.
+  - **Phone privacy:** like your email, your phone is shown only to admins of events you're on.
+  - **First sign-in:** a one-time welcome step asks you to set it up. That includes people who join from an invite, whose name is otherwise guessed from their email.
+  - **"Later":** skips it on that device.
 - Test mode: no server is connected yet. A test backend keeps the team, invites and messages in this browser and applies the same rules a server must. Each browser tab signs in separately, so open an invite link in a second tab to try the app as that person and watch messages arrive live. Switch test accounts from the account menu.
 
 Confirm safety marker positions (extinguishers, exits, first aid) with the venue and local civil protection.
@@ -80,7 +84,8 @@ src/
   lib/useMediaQuery.ts      phone breakpoint (MOBILE_QUERY)
   lib/backend/              Backend interface (types.ts) and the in-browser test backend (mock.ts)
   components/mobile/        MobileHub (phone home), MobileApp (shell, tabs), MobileMap, MobileTables, MobileGuests, MobileDetails, Sheets (bottom sheets, check-in)
-  components/team/          TeamPanel, PeopleSection, MessagesSection, AccountMenu, UrgentBanner
+  components/team/          TeamPanel, PeopleSection, MessagesSection, AccountMenu, ProfileDialog, Avatar, UrgentBanner
+  lib/profile.ts            profile fields and the rules both the app and the backend apply
   store/usePlanStore.ts     Zustand store, undo/redo, events, autosave
   store/team.ts             sign-in, roles, sharing and sync, invites, check-in, messages
   components/dialogs/       New event, Repeat, Seating block, Custom object, Load-in schedule, Vendor / layer export, Version history

@@ -377,6 +377,8 @@ The screens talk to one interface, `Backend` in `src/lib/backend/types.ts`. A re
   - only admins change the plan, people, groups and messages;
   - staff get guests without emails;
   - staff only see messages sent to everyone or to their groups;
+  - members' email and phone go only to the event's admins;
+- save profiles (`updateProfile`) with the same rules as the app (`cleanProfile` in `src/lib/profile.ts`). The profile is name, job title, company, phone, avatar colour and photo, and is built and tested with the test backend. Changing an email needs a confirmation link, so it waits for the server. Metric/imperial units are deliberately not included yet;
 - refuse a plan save whose `baseUpdatedAt` isn't the current version (HTTP 409);
 - keep check-ins separate from the plan;
 - answer a small status call (role, plan version, check-ins) that the app can poll cheaply;
