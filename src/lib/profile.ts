@@ -56,7 +56,7 @@ export function cleanProfile(p: ProfilePatch): { ok: true; patch: ProfilePatch }
 
 /** Applies a cleaned change: empty optional fields are removed. */
 export function applyProfile<T extends ProfileFields>(current: T, patch: ProfilePatch): T {
-  const next: Record<string, unknown> = { ...current }
+  const next = { ...current } as Record<string, unknown>
   for (const [k, v] of Object.entries(patch)) {
     if (v === '' && k !== 'name') delete next[k]
     else if (v !== undefined) next[k] = v
