@@ -232,7 +232,7 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
         <>
           <rect x={-e.w / 2} y={-e.h / 2} width={e.w} height={e.h} rx={Math.min(e.w, e.h) * 0.08}
             fill={color} fillOpacity={e.style?.fillOpacity ?? (shape === 'line' ? 1 : 0.9)} />
-          {showLabels && shape !== 'line' && Math.min(e.w, e.h) > 0.35 && (
+          {showLabels && shape !== 'line' && e.kind !== 'chair' && Math.min(e.w, e.h) > 0.35 && (
             <text textAnchor="middle" dominantBaseline="middle" fontFamily={FONT} fontSize={fs}
               fill={dark ? '#eaf1fa' : '#0a1729'} transform={vertical ? 'rotate(-90)' : undefined}>{e.label}</text>
           )}

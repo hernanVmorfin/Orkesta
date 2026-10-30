@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
-import type { Guest, LayerId, LayerState, Plan, PlanElement, Pt } from '../types'
+import type { Group, Guest, LayerId, LayerState, Plan, PlanElement, Pt } from '../types'
 import { CATALOG, isTableKind } from '../lib/catalog'
 import { blankPlan } from '../data/blankPlan'
 import { readShared } from '../lib/share'
@@ -8,10 +8,11 @@ import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
 import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seating'
 import { normalize, selfIntersects } from '../lib/shapes'
+import { currentLevel } from '../lib/levels'
 import type { Account, Invite, Member, Message, Role, SharedEventInfo, StaffGroup } from '../lib/backend'
 
-/** 'geo' drags the satellite under the plan to line it up with the venue. */
-export type Tool = 'select' | 'measure' | 'geo'
+/** 'geo' drags the satellite under the plan to line it up with the venue; 'comment' drops comment pins. */
+export type Tool = 'select' | 'measure' | 'geo' | 'comment'
 export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue' | 'team'
 export type SaveState = 'saved' | 'saving' | 'error'
 /** Shared events only: whether this device's edits have reached the server. */
@@ -48,6 +49,15 @@ interface State {
   measure: { a: Pt; b: Pt } | null
   /** A line or area being drawn (plan meters) */
   drawing: { kind: string; points: Pt[] } | null
+  /** Level being shown; null = the first */
+  levelId: string | null
+  /** Modal dialogs opened from menus */
+  dialog: 'repeat' | 'seatBlock' | 'templates' | 'schedule' | 'history' | 'customItem' | null
+  showComments: boolean
+  showResolved: boolean
+  /** Open comment thread, or a new comment being written at a point */
+  activeComment: string | null
+  commentDraft: Pt | null
   rightTab: RightTab
   highlightTable: string | null
   /** False until the current event has been read from IndexedDB. */
@@ -98,6 +108,23 @@ interface State {
   updateMany: (fn: (e: PlanElement) => PlanElement, ids: string[], record?: boolean) => void
   deleteSelected: () => void
   duplicateSelected: () => void
+  /** Adds ready-made elements (seating blocks, templates, pasted objects), renumbering tables. */
+  addElements: (els: Omit<PlanElement, 'id'>[], select?: boolean) => string[]
+  copySelected: () => number
+  cutSelected: () => void
+  /** Pastes the clipboard, centered on `at` or offset from the originals. */
+  paste: (at?: Pt) => number
+  reorder: (dir: 'front' | 'back' | 'forward' | 'backward') => void
+  setHidden: (ids: string[], hidden: boolean) => void
+  /** Copies one object into a grid of columns × rows with gaps between them, along its rotation. */
+  repeat: (id: string, cols: number, rows: number, gapX: number, gapY: number) => void
+  groupSelected: (name?: string) => string | null
+  ungroup: (groupId: string) => void
+  updateGroup: (groupId: string, patch: Partial<Group>) => void
+  addComment: (at: Pt, body: string) => void
+  replyComment: (id: string, body: string) => void
+  resolveComment: (id: string, resolved: boolean) => void
+  deleteComment: (id: string, replyId?: string) => void
   select: (ids: string[], additive?: boolean) => void
   setLayer: (id: LayerId, patch: Partial<LayerState>) => void
 
@@ -130,7 +157,18 @@ async function migrateLegacy() {
   try { localStorage.removeItem(LEGACY_KEY) } catch { /* ignore */ }
 }
 
-const clearHistory = { past: [], future: [], selection: [], highlightTable: null, measure: null, drawing: null }
+const clearHistory = { past: [], future: [], selection: [], highlightTable: null, measure: null, drawing: null, levelId: null }
+
+/** Comment author: the signed-in account, else a name remembered on this device. */
+function authorName() {
+  const acc = usePlanStore.getState().account
+  if (acc?.name) return acc.name
+  try { return localStorage.getItem('inbest-floorplan:author') || 'You' } catch { return 'You' }
+}
+
+/** Copied objects; also kept in localStorage so they can be pasted into another event. */
+const CLIPBOARD_KEY = 'inbest-floorplan:clipboard'
+let clipboard: { els: PlanElement[]; pastes: number } | null = null
 let hydrating: Promise<void> | undefined
 
 export const seatsUsed = (plan: Plan, tableId: string) => plan.guests.filter((g) => g.tableId === tableId).length
@@ -156,6 +194,12 @@ export const usePlanStore = create<State>((set, get) => ({
   viewOnly: init.viewOnly,
   measure: null,
   drawing: null,
+  levelId: null,
+  dialog: null,
+  showComments: true,
+  showResolved: false,
+  activeComment: null,
+  commentDraft: null,
   rightTab: 'tables',
   highlightTable: null,
   hydrated: init.viewOnly,
@@ -258,6 +302,7 @@ export const usePlanStore = create<State>((set, get) => ({
       const e: PlanElement = {
         id, kind, x: at.x, y: at.y, w: c.w, h: c.h, rotation: 0, layer: c.layer, seats: c.seats,
         label: isTable ? `Table ${nextNum}` : c.name, number: nextNum, tag: isTable ? 'general' : undefined,
+        levelId: currentLevel(p, get().levelId),
       }
       return { ...p, elements: [...p.elements, e] }
     })
@@ -284,7 +329,7 @@ export const usePlanStore = create<State>((set, get) => ({
     const id = nanoid(8)
     get().mutate((p) => ({
       ...p,
-      elements: [...p.elements, { id, kind: drawing.kind, label: c.name, rotation: 0, layer: c.layer, ...normalize(pts) }],
+      elements: [...p.elements, { id, kind: drawing.kind, label: c.name, rotation: 0, layer: c.layer, ...normalize(pts), levelId: currentLevel(p, get().levelId) }],
     }))
     set({ drawing: null, placing: null, selection: [id] })
     return null
@@ -319,6 +364,150 @@ export const usePlanStore = create<State>((set, get) => ({
       })
     get().mutate((p) => ({ ...p, elements: [...p.elements, ...copies] }))
     set({ selection: copies.map((c) => c.id) })
+  },
+  addElements: (els, select = true) => {
+    const ids: string[] = []
+    get().mutate((p) => {
+      let num = Math.max(0, ...p.elements.map((e) => e.number ?? 0))
+      const added = els.map((e) => {
+        const id = nanoid(8)
+        ids.push(id)
+        const n = e.number != null ? ++num : undefined
+        return { ...e, id, number: n, label: n != null ? `Table ${n}` : e.label } as PlanElement
+      })
+      return { ...p, elements: [...p.elements, ...added] }
+    })
+    if (select) set({ selection: ids })
+    return ids
+  },
+  copySelected: () => {
+    const { plan, selection } = get()
+    const els = plan.elements.filter((e) => selection.includes(e.id))
+    if (!els.length) return 0
+    clipboard = { els, pastes: 0 }
+    try { localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(els)) } catch { /* too big or unavailable */ }
+    return els.length
+  },
+  cutSelected: () => {
+    if (get().copySelected()) get().deleteSelected()
+  },
+  paste: (at) => {
+    if (!clipboard) {
+      try {
+        const raw = localStorage.getItem(CLIPBOARD_KEY)
+        if (raw) clipboard = { els: JSON.parse(raw) as PlanElement[], pastes: 0 }
+      } catch { /* nothing to paste */ }
+    }
+    if (!clipboard?.els.length) return 0
+    const { plan } = get()
+    const groups = new Set((plan.groups ?? []).map((g) => g.id))
+    clipboard.pastes += 1
+    const cx = clipboard.els.reduce((n, e) => n + e.x, 0) / clipboard.els.length
+    const cy = clipboard.els.reduce((n, e) => n + e.y, 0) / clipboard.els.length
+    const dx = at ? at.x - cx : clipboard.pastes, dy = at ? at.y - cy : clipboard.pastes
+    const ids = get().addElements(clipboard.els.map(({ id: _id, ...e }) => ({
+      ...e, x: +(e.x + dx).toFixed(3), y: +(e.y + dy).toFixed(3), locked: false,
+      groupId: e.groupId && groups.has(e.groupId) ? e.groupId : undefined, levelId: currentLevel(plan, get().levelId),
+    })))
+    return ids.length
+  },
+  reorder: (dir) => {
+    const { selection } = get()
+    if (!selection.length) return
+    const sel = new Set(selection)
+    get().mutate((p) => {
+      const z = new Map<string, number>()
+      for (const layer of new Set(p.elements.filter((e) => sel.has(e.id)).map((e) => e.layer))) {
+        // Siblings in their current stacking order, then move the selected ones
+        let order = p.elements.map((e, i) => ({ e, i })).filter(({ e }) => e.layer === layer)
+          .sort((a, b) => (a.e.z ?? 0) - (b.e.z ?? 0) || a.i - b.i).map(({ e }) => e)
+        if (dir === 'front') order = [...order.filter((e) => !sel.has(e.id)), ...order.filter((e) => sel.has(e.id))]
+        else if (dir === 'back') order = [...order.filter((e) => sel.has(e.id)), ...order.filter((e) => !sel.has(e.id))]
+        else {
+          const up = dir === 'forward'
+          const idx = order.map((_, i) => i)
+          for (const i of up ? [...idx].reverse() : idx) {
+            const j = up ? i + 1 : i - 1
+            if (j < 0 || j >= order.length || !sel.has(order[i].id) || sel.has(order[j].id)) continue
+            ;[order[i], order[j]] = [order[j], order[i]]
+          }
+        }
+        order.forEach((e, i) => z.set(e.id, i))
+      }
+      return { ...p, elements: p.elements.map((e) => (z.has(e.id) ? { ...e, z: z.get(e.id) } : e)) }
+    })
+  },
+  setHidden: (ids, hidden) => {
+    const set_ = new Set(ids)
+    get().mutate((p) => ({ ...p, elements: p.elements.map((e) => (set_.has(e.id) ? { ...e, hidden: hidden || undefined } : e)) }))
+    if (hidden) set((s) => ({ selection: s.selection.filter((id) => !set_.has(id)) }))
+  },
+  repeat: (id, cols, rows, gapX, gapY) => {
+    const e = get().plan.elements.find((x) => x.id === id)
+    if (!e) return
+    const a = (e.rotation * Math.PI) / 180, c = Math.cos(a), sn = Math.sin(a)
+    const stepX = e.w + gapX, stepY = e.h + gapY
+    const copies: Omit<PlanElement, 'id'>[] = []
+    for (let r = 0; r < rows; r++) {
+      for (let k = 0; k < cols; k++) {
+        if (!r && !k) continue
+        const lx = k * stepX, ly = r * stepY
+        const { id: _id, ...rest } = e
+        copies.push({ ...rest, x: +(e.x + lx * c - ly * sn).toFixed(3), y: +(e.y + lx * sn + ly * c).toFixed(3), locked: false })
+      }
+    }
+    const ids = get().addElements(copies, false)
+    set({ selection: [id, ...ids] })
+  },
+  groupSelected: (name) => {
+    const { plan, selection } = get()
+    const els = plan.elements.filter((e) => selection.includes(e.id))
+    if (!els.length) return null
+    const id = nanoid(8)
+    // A group lives in one layer: the one most of its objects are in
+    const counts = new Map<LayerId, number>()
+    els.forEach((e) => counts.set(e.layer, (counts.get(e.layer) ?? 0) + 1))
+    const layer = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    const n = (plan.groups ?? []).length + 1
+    get().mutate((p) => ({
+      ...p,
+      groups: [...(p.groups ?? []), { id, name: name ?? `Group ${n}`, layer, visible: true, locked: false }],
+      elements: p.elements.map((e) => (selection.includes(e.id) ? { ...e, groupId: id, layer } : e)),
+    }))
+    return id
+  },
+  ungroup: (groupId) => get().mutate((p) => ({
+    ...p,
+    groups: (p.groups ?? []).filter((g) => g.id !== groupId),
+    elements: p.elements.map((e) => (e.groupId === groupId ? { ...e, groupId: undefined } : e)),
+  })),
+  updateGroup: (groupId, patch) => get().mutate((p) => ({
+    ...p, groups: (p.groups ?? []).map((g) => (g.id === groupId ? { ...g, ...patch } : g)),
+  }), patch.name === undefined),
+  addComment: (at, body) => {
+    const id = nanoid(8)
+    get().mutate((p) => ({
+      ...p,
+      comments: [...(p.comments ?? []), { id, x: at.x, y: at.y, levelId: currentLevel(p, get().levelId), author: authorName(), body, createdAt: Date.now(), replies: [] }],
+    }))
+    set({ commentDraft: null, activeComment: id, tool: 'select' })
+  },
+  replyComment: (id, body) => get().mutate((p) => ({
+    ...p,
+    comments: (p.comments ?? []).map((c) => (c.id === id ? { ...c, replies: [...c.replies, { id: nanoid(8), author: authorName(), body, createdAt: Date.now() }] } : c)),
+  })),
+  resolveComment: (id, resolved) => {
+    get().mutate((p) => ({ ...p, comments: (p.comments ?? []).map((c) => (c.id === id ? { ...c, resolved: resolved || undefined } : c)) }))
+    if (resolved && !get().showResolved) set({ activeComment: null })
+  },
+  deleteComment: (id, replyId) => {
+    get().mutate((p) => ({
+      ...p,
+      comments: replyId
+        ? (p.comments ?? []).map((c) => (c.id === id ? { ...c, replies: c.replies.filter((r) => r.id !== replyId) } : c))
+        : (p.comments ?? []).filter((c) => c.id !== id),
+    }))
+    if (!replyId) set({ activeComment: null })
   },
   select: (ids, additive) => set((s) => {
     if (!additive) return { selection: ids }

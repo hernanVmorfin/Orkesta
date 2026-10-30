@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, ChevronDown } from 'lucide-react'
+import { Search, ChevronDown, Armchair, Plus } from 'lucide-react'
 import { LIBRARY_GROUPS } from '../lib/catalog'
 import { ICONS } from '../lib/icons'
 import type { CatalogItem } from '../types'
@@ -51,6 +51,14 @@ export function Library() {
           <Search size={14} className="absolute left-2 top-2 text-muted" />
           <input className="input pl-7" placeholder="Search tables, exits, staff…" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
+        <div className="mt-2 flex gap-1">
+          <button className="btn flex-1 justify-center border border-bg-2 px-1 text-xs" onClick={() => set({ dialog: 'seatBlock' })} title="Theatre or classroom rows with aisles">
+            <Armchair size={14} />Seating block
+          </button>
+          <button className="btn flex-1 justify-center border border-bg-2 px-1 text-xs" onClick={() => set({ dialog: 'customItem' })} title="Your own object, any size">
+            <Plus size={14} />Custom object
+          </button>
+        </div>
       </div>
       <div className="panel-scroll flex-1 overflow-y-auto px-3 pb-4">
         {LIBRARY_GROUPS.map((g) => {

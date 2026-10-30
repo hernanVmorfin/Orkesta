@@ -7,6 +7,9 @@ import { clearanceIssues, dist, distToRect, snap } from '../lib/geometry'
 import { distToShape, fmtArea, fmtLen, pathLength, polygonArea, renormalize, toLocal, toPlan } from '../lib/shapes'
 import { canvasRef, type FocusRequest } from '../lib/canvas'
 import { toast } from '../lib/toast'
+import { isLockedEl, venueOf, visibleOnLevel } from '../lib/levels'
+import { ContextMenu, type MenuState } from './ContextMenu'
+import { CommentsLayer } from './Comments'
 import { SATELLITE_ATTRIBUTION, planToLatLng, tileZoom, tilesFor } from '../lib/geo'
 import type { GeoAnchor, PlanElement, Pt } from '../types'
 
@@ -35,6 +38,8 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
   const [cursor, setCursor] = useState<Pt | null>(null)
   const [marquee, setMarquee] = useState<{ a: Pt; b: Pt } | null>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const venue = venueOf(plan, s.levelId)
   // A fit asked for while the canvas was hidden (phone tabs) runs once it has a size again
   const pendingFit = useRef(false)
   const fitRef = useRef<() => void>(() => {})
@@ -72,8 +77,8 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
     const { width, height } = el.getBoundingClientRect()
     pendingFit.current = !width || !height
     if (pendingFit.current) return
-    const z = Math.min(width / plan.widthM, height / plan.heightM) * 0.94
-    s.set({ zoom: z, pan: { x: (width - plan.widthM * z) / 2, y: (height - plan.heightM * z) / 2 } })
+    const z = Math.min(width / venue.widthM, height / venue.heightM) * 0.94
+    s.set({ zoom: z, pan: { x: (width - venue.widthM * z) / 2, y: (height - venue.heightM * z) / 2 } })
   }
   fitRef.current = fit
 
@@ -84,7 +89,7 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
     window.addEventListener('fp:fit', onFit)
     return () => window.removeEventListener('fp:fit', onFit)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan.id, plan.widthM, plan.heightM])
+  }, [plan.id, venue.widthM, venue.heightM, s.levelId])
 
   // Wheel zoom around cursor (non-passive so we can preventDefault)
   useEffect(() => {
@@ -117,10 +122,10 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
   }, [])
 
   const visible = useMemo(
-    () => plan.elements
-      .filter((e) => plan.layers[e.layer]?.visible !== false && !e.hidden)
+    () => visibleOnLevel(plan, s.levelId)
       .sort((a, b) => (LAYER_ORDER[a.layer] ?? 0) - (LAYER_ORDER[b.layer] ?? 0) || (a.z ?? 0) - (b.z ?? 0)),
-    [plan.elements, plan.layers],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plan.elements, plan.layers, plan.groups, plan.levels, s.levelId],
   )
   const tagById = useMemo(() => new Map(plan.tags.map((t) => [t.id, t])), [plan.tags])
   const usedByTable = useMemo(() => {
@@ -135,7 +140,7 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
 
   const isLocked = (id: string) => {
     const e = plan.elements.find((x) => x.id === id)
-    return !e || e.locked || plan.layers[e.layer]?.locked
+    return !e || isLockedEl(plan, e)
   }
 
   /** Element under the pointer, or the nearest one within a fingertip (~24 px) of it. */
@@ -219,7 +224,20 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       }
       return
     }
-    if (ev.button === 2) return
+    if (ev.button === 2) {
+      // Right-click: select what's under the pointer, then show the menu
+      if (readOnly) return
+      const hit = hitAt(target, w)
+      if (hit && !selection.includes(hit)) s.select([hit])
+      if (!hit) s.set({ selection: [] })
+      const r = svgRef.current!.getBoundingClientRect()
+      setMenu({ x: ev.clientX - r.left, y: ev.clientY - r.top, at: w })
+      return
+    }
+    if (s.tool === 'comment' && !readOnly) {
+      s.set({ commentDraft: w, activeComment: null, showComments: true })
+      return
+    }
     if (s.placing && !readOnly) {
       s.addElement(s.placing, s.snapOn ? { x: snap(w.x), y: snap(w.y) } : w)
       if (!ev.shiftKey) s.set({ placing: null })
@@ -369,7 +387,7 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
 
   const selected = plan.elements.filter((e) => selection.includes(e.id))
   const single = selected.length === 1 && !readOnly && !isLocked(selected[0].id) ? selected[0] : null
-  const bm = plan.basemap
+  const bm = venue.basemap
   const m = s.measure
 
   return (
@@ -377,7 +395,7 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       <svg
         ref={svgRef}
         className="h-full w-full touch-none select-none"
-        style={{ cursor: s.placing ? 'copy' : s.tool === 'measure' ? 'crosshair' : s.tool === 'geo' ? 'move' : 'grab' }}
+        style={{ cursor: s.placing ? (isDrawnKind(s.placing) ? 'crosshair' : 'copy') : s.tool === 'measure' || s.tool === 'comment' ? 'crosshair' : s.tool === 'geo' ? 'move' : 'grab' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -389,7 +407,7 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
         onDrop={onDrop}
       >
         <g id="world" transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
-          <rect id="venue-bg" width={plan.widthM} height={plan.heightM} fill="#ffffff" />
+          <rect id="venue-bg" width={venue.widthM} height={venue.heightM} fill="#ffffff" />
           {satellite && (
             <g className="satellite" transform={`rotate(${satellite.rotation})`} opacity={satellite.opacity} pointerEvents="none">
               {/* one tile pixel of overlap hides seams between tiles */}
@@ -402,8 +420,8 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
             <image id="basemap" href={bm.src} x={bm.x} y={bm.y} width={bm.widthM} height={bm.widthM / bm.aspect}
               opacity={bm.opacity} preserveAspectRatio="none" />
           )}
-          {s.showGrid && <Grid w={plan.widthM} h={plan.heightM} />}
-          <rect width={plan.widthM} height={plan.heightM} fill="none" stroke="#0a1729" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          {s.showGrid && <Grid w={venue.widthM} h={venue.heightM} />}
+          <rect width={venue.widthM} height={venue.heightM} fill="none" stroke="#0a1729" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
 
           {visible.map((e) => (
             <ElementShape key={e.id} e={e} tag={e.tag ? tagById.get(e.tag) : undefined}
@@ -468,6 +486,13 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
         </g>
       </svg>
 
+      <CommentsLayer readOnly={readOnly} width={size.w} />
+      {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} onComment={(at) => s.set({ commentDraft: at, activeComment: null, showComments: true })} />}
+      {s.tool === 'comment' && !review && (
+        <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
+          Click the plan to leave a comment · Esc to stop
+        </div>
+      )}
       <ScaleBar zoom={zoom} />
       {!review && (
         <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-white/90 px-2 py-1 font-mono text-[11px] text-muted shadow-sm">

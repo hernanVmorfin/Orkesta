@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { Copy, Trash2, Lock, Unlock, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, ChevronRight, EyeOff } from 'lucide-react'
+import { Copy, Trash2, Lock, Unlock, AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, AlignHorizontalSpaceAround, AlignVerticalSpaceAround, X, ChevronRight, EyeOff, Grid2x2, FolderPlus } from 'lucide-react'
 import { usePlanStore, seatsUsed } from '../store/usePlanStore'
 import { CATALOG, LAYERS, isTableKind } from '../lib/catalog'
 import { CALCS, calcInputs, calcOf } from '../lib/calcs'
@@ -144,8 +144,9 @@ export function Inspector() {
       {!s.viewOnly && (
         <div className="flex flex-wrap gap-1">
           <button className="btn" onClick={() => up({ locked: !e.locked })}>{e.locked ? <Unlock size={15} /> : <Lock size={15} />}{e.locked ? 'Unlock' : 'Lock'}</button>
-          <button className="btn" onClick={() => up({ hidden: true })} title="Hide (show it again from the Layers tab)"><EyeOff size={15} />Hide</button>
+          <button className="btn" onClick={() => s.setHidden([e.id], true)} title="Hide (show it again from the Layers tab)"><EyeOff size={15} />Hide</button>
           <button className="btn" onClick={s.duplicateSelected}><Copy size={15} />Duplicate</button>
+          <button className="btn" onClick={() => s.set({ dialog: 'repeat' })} title="Copy into rows and columns"><Grid2x2 size={15} />Repeat</button>
           <button className="btn text-red-600" onClick={s.deleteSelected} disabled={e.locked}><Trash2 size={15} />Delete</button>
         </div>
       )}
@@ -328,7 +329,9 @@ function MultiInspector({ sel }: { sel: PlanElement[] }) {
               </div>
             </div>
           )}
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
+            <button className="btn" onClick={() => { s.groupSelected() }} title="Group into a folder (Ctrl+G)"><FolderPlus size={15} />Group</button>
+            <button className="btn" onClick={() => s.setHidden(ids, true)}><EyeOff size={15} />Hide</button>
             <button className="btn" onClick={s.duplicateSelected}><Copy size={15} />Duplicate</button>
             <button className="btn text-red-600" onClick={s.deleteSelected}><Trash2 size={15} />Delete</button>
           </div>

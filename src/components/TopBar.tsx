@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   Undo2, Redo2, ZoomIn, ZoomOut, Maximize, MousePointer2, Ruler, Grid3x3, Magnet, Image as ImageIcon,
   TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff, Satellite, SlidersHorizontal, Shapes, PanelRight, Check, Cloud,
+  MessageSquare, MessagesSquare,
 } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { useIsWide } from '../lib/useMediaQuery'
@@ -37,6 +38,7 @@ export function TopBar() {
     { title: 'Venue basemap', icon: ImageIcon, on: s.showBasemap, toggle: () => s.set({ showBasemap: !s.showBasemap }) },
     { title: 'Aisle clearance check', icon: TriangleAlert, on: s.showClearance, toggle: () => s.set({ showClearance: !s.showClearance }) },
     { title: 'Labels', icon: Tag, on: s.showLabels, toggle: () => s.set({ showLabels: !s.showLabels }) },
+    ...(s.plan.comments?.length ? [{ title: 'Comments', icon: MessagesSquare, on: s.showComments, toggle: () => s.set({ showComments: !s.showComments }) }] : []),
   ]
 
   const zoomBy = (f: number) => {
@@ -70,6 +72,7 @@ export function TopBar() {
           {!wide && <Toggle title="Objects" on={s.showLibrary} onClick={() => s.set({ showLibrary: !s.showLibrary })}><Shapes size={16} /></Toggle>}
           <Toggle title="Select / move (V)" on={s.tool === 'select'} onClick={() => s.set({ tool: 'select', measure: null })}><MousePointer2 size={16} /></Toggle>
           <Toggle title="Measure distance (M)" on={s.tool === 'measure'} onClick={() => s.set({ tool: 'measure', placing: null })}><Ruler size={16} /></Toggle>
+          <Toggle title="Comment (C)" on={s.tool === 'comment'} onClick={() => s.set({ tool: s.tool === 'comment' ? 'select' : 'comment', placing: null, measure: null, showComments: true })}><MessageSquare size={16} /></Toggle>
           <div className="mx-1 h-6 w-px bg-bg-2" />
           <button className="btn px-2" title="Undo (Ctrl+Z)" disabled={!s.past.length} onClick={s.undo}><Undo2 size={16} /></button>
           <button className="btn px-2" title="Redo (Ctrl+Shift+Z)" disabled={!s.future.length} onClick={s.redo}><Redo2 size={16} /></button>

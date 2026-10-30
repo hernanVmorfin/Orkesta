@@ -23,6 +23,7 @@ export const LIBRARY_GROUPS: { id: string; name: string; items: CatalogItem[] }[
       { kind: 'imperial-12', name: 'Imperial 3.6 m', layer: 'seating', shape: 'rectTable', w: 3.6, h: 1.2, seats: 12, color: '#ffffff' },
       { kind: 'cocktail', name: 'Cocktail table', layer: 'seating', shape: 'cocktail', w: 0.8, h: 0.8, color: '#ffffff' },
       { kind: 'chair', name: 'Chair', layer: 'seating', shape: 'rect', w: 0.45, h: 0.45, color: '#5b6576' },
+      { kind: 'classroom-table', name: 'Classroom table', layer: 'seating', shape: 'rect', w: 1.8, h: 0.5, color: '#cbd5e1' },
     ],
   },
   {
