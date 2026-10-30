@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   Undo2, Redo2, ZoomIn, ZoomOut, Maximize, MousePointer2, Ruler, Grid3x3, Magnet, Image as ImageIcon,
   TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff, Satellite, SlidersHorizontal, Shapes, PanelRight, Check,
+  MapPinned,
 } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { useIsWide } from '../lib/useMediaQuery'
@@ -62,6 +63,11 @@ export function TopBar() {
         <div className="truncate text-[11px] text-muted">{s.plan.venue}{s.plan.date ? ` · ${s.plan.date}` : ''}</div>
       </div>
       {!s.viewOnly && <EventsMenu />}
+      {!s.viewOnly && !s.plan.geo && !s.plan.basemap && (
+        <button className="btn btn-primary hidden md:inline-flex" onClick={() => s.set({ rightTab: 'venue', showPanel: true, showVenueSetup: true })}>
+          <MapPinned size={15} />Set up venue
+        </button>
+      )}
 
       {!s.viewOnly && (
         <div className="ml-1 flex items-center gap-1 xl:ml-4">

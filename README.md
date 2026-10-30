@@ -6,11 +6,14 @@ To-scale floor plan, seating and operations manager for events. Built with Vite,
 ```bash
 npm install
 npm run dev      # http://localhost:5173
+npm test         # Node test suite
+npm run lint     # Oxlint
 npm run build    # production build in dist/
 ```
 
 ## What's in the prototype
 - Starts from a blank 30 × 20 m plan (`src/data/blankPlan.ts`); upload a venue drawing or aerial image as a calibrated basemap.
+- Guided venue setup starts from an exact address, centers the satellite surroundings, then uploads, aligns, rotates, calibrates and locks a venue template image.
 - Satellite view (Venue tab): search an address or paste `lat, lng`, then drag and rotate the satellite to line it up with the venue. Imagery stays sharp as you zoom, shows in view-only links, and is included (with attribution) in PNG and PDF exports.
 - Object library: seating, staging and AV, catering, safety, security, workforce, wayfinding and branding, decor.
 - Move, rotate, align, distribute, duplicate, lock, undo/redo, snap, measure, box select.

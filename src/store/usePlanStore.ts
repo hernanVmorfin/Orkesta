@@ -8,8 +8,8 @@ import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
 import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seating'
 
-/** 'geo' drags the satellite under the plan to line it up with the venue. */
-export type Tool = 'select' | 'measure' | 'geo'
+/** Alignment tools move the satellite or uploaded template under editable event objects. */
+export type Tool = 'select' | 'measure' | 'geo' | 'template'
 export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue'
 export type SaveState = 'saved' | 'saving' | 'error'
 
@@ -36,6 +36,7 @@ interface State {
   /** Below 1280 px the library and right panel are slide-over drawers; these open them. */
   showLibrary: boolean
   showPanel: boolean
+  showVenueSetup: boolean
   viewOnly: boolean
   measure: { a: Pt; b: Pt } | null
   rightTab: RightTab
@@ -117,6 +118,7 @@ export const usePlanStore = create<State>((set, get) => ({
   showLabels: true,
   showLibrary: false,
   showPanel: false,
+  showVenueSetup: false,
   viewOnly: init.viewOnly,
   measure: null,
   rightTab: 'tables',

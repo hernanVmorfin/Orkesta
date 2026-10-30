@@ -6,7 +6,8 @@ import { LAYERS, CATALOG, isTableKind } from '../lib/catalog'
 import { clearanceIssues, dist, distToRect, snap } from '../lib/geometry'
 import { canvasRef, type FocusRequest } from '../lib/canvas'
 import { SATELLITE_ATTRIBUTION, planToLatLng, tileZoom, tilesFor } from '../lib/geo'
-import type { GeoAnchor, Pt } from '../types'
+import type { Basemap, GeoAnchor, Pt } from '../types'
+import { moveTemplate } from '../lib/template'
 
 type Drag =
   | { t: 'move'; start: Pt; orig: Map<string, Pt>; primary: string; moved: boolean }
@@ -15,6 +16,7 @@ type Drag =
   | { t: 'measure'; a: Pt }
   | { t: 'marquee'; a: Pt; additive: boolean }
   | { t: 'geo'; start: Pt; geo0: GeoAnchor; moved: boolean }
+  | { t: 'template'; start: Pt; template0: Basemap; moved: boolean }
 
 const LAYER_ORDER = Object.fromEntries(LAYERS.map((l, i) => [l.id, i]))
 
@@ -189,6 +191,10 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       drag.current = { t: 'geo', start: w, geo0: geo, moved: false }
       return
     }
+    if (s.tool === 'template' && plan.basemap && !plan.basemap.locked && !readOnly) {
+      drag.current = { t: 'template', start: w, template0: plan.basemap, moved: false }
+      return
+    }
     if (s.tool === 'measure') {
       drag.current = { t: 'measure', a: w }
       s.set({ measure: { a: w, b: w } })
@@ -253,6 +259,10 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       // The world point that was under plan point -delta now sits at the plan origin
       const at = planToLatLng(d.geo0, { x: d.start.x - w.x, y: d.start.y - w.y })
       s.mutate((p) => ({ ...p, geo: { ...d.geo0, lat: at.lat, lng: at.lng } }), false)
+    } else if (d.t === 'template') {
+      if (!d.moved) { s.checkpoint(); d.moved = true }
+      const next = moveTemplate(d.template0, w.x - d.start.x, w.y - d.start.y)
+      s.mutate((p) => ({ ...p, basemap: next }), false)
     } else if (d.t === 'measure') {
       s.set({ measure: { a: d.a, b: w } })
     } else if (d.t === 'marquee') {
@@ -322,7 +332,7 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       <svg
         ref={svgRef}
         className="h-full w-full touch-none select-none"
-        style={{ cursor: s.placing ? 'copy' : s.tool === 'measure' ? 'crosshair' : s.tool === 'geo' ? 'move' : 'grab' }}
+        style={{ cursor: s.placing ? 'copy' : s.tool === 'measure' ? 'crosshair' : s.tool === 'geo' || s.tool === 'template' ? 'move' : 'grab' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -342,8 +352,14 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
             </g>
           )}
           {bm && s.showBasemap && (
-            <image id="basemap" href={bm.src} x={bm.x} y={bm.y} width={bm.widthM} height={bm.widthM / bm.aspect}
-              opacity={bm.opacity} preserveAspectRatio="none" />
+            <g transform={`rotate(${bm.rotation ?? 0} ${bm.x + bm.widthM / 2} ${bm.y + bm.widthM / bm.aspect / 2})`}>
+              <image id="basemap" href={bm.src} x={bm.x} y={bm.y} width={bm.widthM} height={bm.widthM / bm.aspect}
+                opacity={bm.opacity} preserveAspectRatio="none" />
+              {s.tool === 'template' && !bm.locked && !readOnly && (
+                <rect className="no-export" x={bm.x} y={bm.y} width={bm.widthM} height={bm.widthM / bm.aspect}
+                  fill="none" stroke="#1ea7e8" strokeWidth={2} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              )}
+            </g>
           )}
           {s.showGrid && <Grid w={plan.widthM} h={plan.heightM} />}
           <rect width={plan.widthM} height={plan.heightM} fill="none" stroke="#0a1729" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
@@ -420,6 +436,11 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       {s.tool === 'geo' && !review && (
         <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
           Drag to move the satellite under your venue · rotate it in the Venue tab · Esc when done
+        </div>
+      )}
+      {s.tool === 'template' && !review && (
+        <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
+          Drag to align the template over the satellite · adjust rotation and scale in Guided setup · Esc when done
         </div>
       )}
       {satellite && (

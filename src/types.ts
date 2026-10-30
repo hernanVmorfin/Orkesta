@@ -56,12 +56,16 @@ export interface TableTag { id: string; name: string; color: string }
 
 export interface Basemap {
   src: string
+  /** original upload name, shown in the template controls */
+  name?: string
   /** real-world width of the image in meters (height derived from aspect) */
   widthM: number
   aspect: number
   x: number
   y: number
+  rotation?: number
   opacity: number
+  locked?: boolean
 }
 
 /** Pins the plan to the real world so satellite imagery can be drawn under it. */

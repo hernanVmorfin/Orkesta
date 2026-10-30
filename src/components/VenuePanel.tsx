@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react'
-import { Upload, Plus, FileUp, Ruler } from 'lucide-react'
+import { Upload, Plus, FileUp, Ruler, WandSparkles } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { dist } from '../lib/geometry'
 import type { Plan } from '../types'
 import { SatelliteSection } from './SatelliteSection'
+import { VenueSetupDialog } from './VenueSetupDialog'
+import { calibrateTemplate, createTemplate } from '../lib/template'
 
 export function VenuePanel() {
   const s = usePlanStore()
@@ -14,18 +16,21 @@ export function VenuePanel() {
   const up = (patch: Partial<Plan>) => s.mutate((p) => ({ ...p, ...patch }))
   const bm = plan.basemap
 
-  const onImage = (f: File) => {
+  const onImage = (f: File) => new Promise<void>((resolve, reject) => {
     const r = new FileReader()
+    r.onerror = () => reject(r.error)
     r.onload = () => {
       const img = new Image()
+      img.onerror = reject
       img.onload = () => {
-        up({ basemap: { src: r.result as string, widthM: plan.widthM, aspect: img.width / img.height, x: 0, y: 0, opacity: 0.5 } })
+        up({ basemap: createTemplate({ src: r.result as string, name: f.name, imageWidth: img.width, imageHeight: img.height, planWidthM: plan.widthM, planHeightM: plan.heightM }) })
         s.set({ showBasemap: true })
+        resolve()
       }
       img.src = r.result as string
     }
     r.readAsDataURL(f)
-  }
+  })
 
   /** Calibrate: the current measure line should equal `known` meters → rescale basemap around its origin. */
   const calibrate = () => {
@@ -34,8 +39,7 @@ export function VenuePanel() {
     if (!m || !bm || !k) return
     const d = dist(m.a, m.b)
     if (d < 0.01) return
-    const f = k / d
-    up({ basemap: { ...bm, widthM: +(bm.widthM * f).toFixed(3) } })
+    up({ basemap: calibrateTemplate(bm, d, k) })
     s.set({ measure: null, tool: 'select' })
   }
 
@@ -44,6 +48,13 @@ export function VenuePanel() {
 
   return (
     <div className="space-y-5 p-4 text-sm">
+      <section className="rounded-xl border border-accent/30 bg-accent/5 p-3">
+        <div className="flex items-start gap-2">
+          <WandSparkles size={17} className="mt-0.5 shrink-0 text-accent-deep" />
+          <div><div className="font-semibold text-ink">Guided venue setup</div><p className="mt-1 text-[11px] leading-4 text-muted">Start with the exact address, show the satellite surroundings, then upload and align a venue template.</p></div>
+        </div>
+        <button className="btn btn-primary mt-3 w-full justify-center" onClick={() => s.set({ showVenueSetup: true })}>Open guided setup</button>
+      </section>
       <section className="space-y-2">
         <div className="eyebrow">Event</div>
         <input className="input" value={plan.name} onChange={(e) => up({ name: e.target.value })} placeholder="Event name" />
@@ -64,9 +75,9 @@ export function VenuePanel() {
       <SatelliteSection />
 
       <section className="space-y-2">
-        <div className="eyebrow">Basemap / blueprint</div>
-        <button className="btn w-full justify-center border border-dashed border-accent/50" onClick={() => imgRef.current?.click()}><Upload size={15} />Upload venue drawing or aerial image</button>
-        <input ref={imgRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onImage(f); e.target.value = '' }} />
+        <div className="eyebrow">Template layer</div>
+        <button className="btn w-full justify-center border border-dashed border-accent/50" onClick={() => imgRef.current?.click()}><Upload size={15} />Upload venue drawing or plan</button>
+        <input ref={imgRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void onImage(f); e.target.value = '' }} />
         {bm && (
           <>
             <label className="block"><span className="text-[11px] text-muted">Opacity {Math.round(bm.opacity * 100)}%</span>
@@ -76,6 +87,11 @@ export function VenuePanel() {
               <label><span className="text-[11px] text-muted">Real width m</span><input className="input font-mono" type="number" step={0.1} value={bm.widthM} onChange={(e) => up({ basemap: { ...bm, widthM: +e.target.value } })} /></label>
               <label><span className="text-[11px] text-muted">Offset X</span><input className="input font-mono" type="number" step={0.1} value={bm.x} onChange={(e) => up({ basemap: { ...bm, x: +e.target.value } })} /></label>
               <label><span className="text-[11px] text-muted">Offset Y</span><input className="input font-mono" type="number" step={0.1} value={bm.y} onChange={(e) => up({ basemap: { ...bm, y: +e.target.value } })} /></label>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label><span className="text-[11px] text-muted">Rotation °</span><input className="input font-mono" type="number" step={0.5} value={bm.rotation ?? 0} onChange={(e) => up({ basemap: { ...bm, rotation: +e.target.value || 0 } })} /></label>
+              <button className={`btn self-end justify-center ${s.tool === 'template' ? 'btn-ghost-active' : ''}`} disabled={bm.locked}
+                onClick={() => s.set({ tool: s.tool === 'template' ? 'select' : 'template', placing: null, measure: null })}>{s.tool === 'template' ? 'Done moving' : 'Drag to align'}</button>
             </div>
             <div className="rounded-lg bg-bg p-3">
               <div className="mb-1 flex items-center gap-1 font-semibold"><Ruler size={14} />Calibrate scale</div>
@@ -90,6 +106,7 @@ export function VenuePanel() {
                 <button className="btn btn-primary" disabled={!s.measure} onClick={calibrate}>Apply</button>
               </div>
             </div>
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={!!bm.locked} onChange={(e) => { up({ basemap: { ...bm, locked: e.target.checked } }); if (e.target.checked) s.set({ tool: 'select' }) }} />Lock template</label>
             <button className="btn text-red-600" onClick={() => up({ basemap: undefined })}>Remove basemap</button>
           </>
         )}
@@ -111,6 +128,7 @@ export function VenuePanel() {
         </button>
         <p className="text-[11px] text-muted">Events are saved in this browser. Switch between them from the menu next to the event name.</p>
       </section>
+      {s.showVenueSetup && <VenueSetupDialog onClose={() => s.set({ showVenueSetup: false })} onUpload={onImage} />}
     </div>
   )
 }
