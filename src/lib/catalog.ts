@@ -1,4 +1,4 @@
-import type { CatalogItem, LayerId } from '../types'
+import type { CatalogItem, CustomItem, LayerId } from '../types'
 
 export const LAYERS: { id: LayerId; name: string }[] = [
   { id: 'structure', name: 'Venue structure' },
@@ -146,9 +146,80 @@ export const LIBRARY_GROUPS: { id: string; name: string; items: CatalogItem[] }[
   },
 ]
 
+/** Event-type packs, collapsed in the library until opened. */
+export const PACK_GROUPS: { id: string; name: string; items: CatalogItem[] }[] = [
+  {
+    id: 'pack-gala', name: 'Pack · Gala & wedding',
+    items: [
+      { kind: 'dance-floor', name: 'Dance floor', layer: 'staging', shape: 'rect', w: 6, h: 6, color: '#c8a978' },
+      { kind: 'dj-booth', name: 'DJ booth', layer: 'staging', shape: 'rect', w: 2, h: 1, color: '#1c2638' },
+      { kind: 'head-table', name: 'Head table', layer: 'seating', shape: 'rectTable', w: 4.8, h: 0.9, seats: 8, color: '#ffffff' },
+      { kind: 'sweetheart', name: 'Sweetheart table', layer: 'seating', shape: 'rectTable', w: 1.2, h: 0.7, seats: 2, color: '#ffffff' },
+      { kind: 'cake-table', name: 'Cake table', layer: 'service', shape: 'icon', w: 1.2, h: 1.2, color: '#db2777', icon: 'Cake' },
+      { kind: 'gift-table', name: 'Gift table', layer: 'service', shape: 'icon', w: 1.2, h: 1.2, color: '#7c3aed', icon: 'Gift' },
+      { kind: 'lounge', name: 'Lounge set', layer: 'decor', shape: 'rect', w: 3, h: 2, color: '#94a3b8' },
+      { kind: 'photo-booth', name: 'Photo booth', layer: 'staging', shape: 'rect', w: 2.4, h: 2.4, color: '#7c3aed' },
+      { kind: 'coat-check', name: 'Coat check', layer: 'service', shape: 'rect', w: 3, h: 1, color: '#64748b' },
+      { kind: 'champagne-bar', name: 'Champagne bar', layer: 'service', shape: 'rect', w: 2.4, h: 0.8, color: '#b45309' },
+      { kind: 'flower-arch', name: 'Flower arch', layer: 'decor', shape: 'icon', w: 1.6, h: 1.6, color: '#16a34a', icon: 'Sparkles' },
+    ],
+  },
+  {
+    id: 'pack-expo', name: 'Pack · Conference & expo',
+    items: [
+      { kind: 'booth-3x3', name: 'Booth 3 × 3 m', layer: 'structure', shape: 'rect', w: 3, h: 3, color: '#cbd5e1' },
+      { kind: 'booth-3x6', name: 'Booth 3 × 6 m', layer: 'structure', shape: 'rect', w: 6, h: 3, color: '#cbd5e1' },
+      { kind: 'breakout', name: 'Breakout room', layer: 'structure', shape: 'zone', w: 8, h: 6, color: '#075e99' },
+      { kind: 'interpreter', name: 'Interpreter booth', layer: 'staging', shape: 'rect', w: 2.4, h: 1.8, color: '#475569' },
+      { kind: 'info-desk', name: 'Information desk', layer: 'service', shape: 'rect', w: 2, h: 0.8, color: '#1ea7e8' },
+      { kind: 'badge-print', name: 'Badge printing', layer: 'service', shape: 'icon', w: 1, h: 1, color: '#1ea7e8', icon: 'Ticket', calc: 'throughput', calcDefaults: { per15: 90 } },
+      { kind: 'coffee', name: 'Coffee station', layer: 'service', shape: 'rect', w: 2.4, h: 0.8, color: '#78350f' },
+      { kind: 'charging', name: 'Charging station', layer: 'service', shape: 'icon', w: 0.8, h: 0.8, color: '#16a34a', icon: 'BatteryCharging' },
+      { kind: 'poster-board', name: 'Poster board', layer: 'wayfinding', shape: 'rect', w: 2, h: 0.15, color: '#1c2638' },
+      { kind: 'wifi', name: 'Wi-Fi point', layer: 'service', shape: 'icon', w: 0.7, h: 0.7, color: '#075e99', icon: 'Wifi' },
+    ],
+  },
+  {
+    id: 'pack-concert', name: 'Pack · Concert & club',
+    items: [
+      { kind: 'vip-riser', name: 'VIP riser', layer: 'staging', shape: 'rect', w: 6, h: 3, color: '#b45309' },
+      { kind: 'speaker-stack', name: 'Speaker stack', layer: 'staging', shape: 'rect', w: 1.5, h: 1, color: '#0a1729' },
+      { kind: 'delay-tower', name: 'Delay tower', layer: 'staging', shape: 'icon', w: 1.2, h: 1.2, color: '#0a1729', icon: 'Speaker' },
+      { kind: 'merch', name: 'Merch stand', layer: 'service', shape: 'rect', w: 3, h: 1, color: '#7c3aed' },
+      { kind: 'toilet-block', name: 'Toilet block', layer: 'service', shape: 'rect', w: 6, h: 2.4, color: '#0ea5e9' },
+      { kind: 'green-room', name: 'Artist area', layer: 'structure', shape: 'zone', w: 6, h: 4, color: '#7c3aed' },
+      { kind: 'prod-office', name: 'Production office', layer: 'structure', shape: 'rect', w: 6, h: 2.4, color: '#475569' },
+      { kind: 'water-point', name: 'Free water point', layer: 'service', shape: 'icon', w: 0.9, h: 0.9, color: '#0ea5e9', icon: 'Info' },
+    ],
+  },
+  {
+    id: 'pack-boh', name: 'Back of house',
+    items: [
+      { kind: 'catering-pantry', name: 'Catering pantry', layer: 'service', shape: 'rect', w: 4, h: 3, color: '#78350f' },
+      { kind: 'kitchen', name: 'Field kitchen', layer: 'service', shape: 'icon', w: 1.4, h: 1.4, color: '#78350f', icon: 'Utensils' },
+      { kind: 'dumpster', name: 'Dumpster', layer: 'service', shape: 'rect', w: 2, h: 1.5, color: '#475569' },
+      { kind: 'loading-dock', name: 'Loading dock', layer: 'structure', shape: 'zone', w: 6, h: 4, color: '#d97706' },
+      { kind: 'storage', name: 'Storage', layer: 'structure', shape: 'zone', w: 4, h: 4, color: '#64748b' },
+      { kind: 'staff-room', name: 'Staff room', layer: 'structure', shape: 'zone', w: 5, h: 4, color: '#0ea5a4' },
+      { kind: 'truck', name: 'Truck', layer: 'service', shape: 'rect', w: 7.5, h: 2.5, color: '#334155' },
+      { kind: 'portaloo', name: 'Portable toilet', layer: 'service', shape: 'rect', w: 1.1, h: 1.2, color: '#0ea5e9' },
+      { kind: 'accessible-wc', name: 'Accessible toilet', layer: 'service', shape: 'rect', w: 1.6, h: 1.6, color: '#075e99' },
+      { kind: 'baby-change', name: 'Baby change', layer: 'service', shape: 'icon', w: 0.9, h: 0.9, color: '#db2777', icon: 'Baby' },
+      { kind: 'parking-bay', name: 'Parking bay', layer: 'service', shape: 'rect', w: 2.5, h: 5, color: '#94a3b8' },
+    ],
+  },
+]
+
 export const CATALOG: Record<string, CatalogItem> = Object.fromEntries(
-  LIBRARY_GROUPS.flatMap((g) => g.items).map((i) => [i.kind, i]),
+  [...LIBRARY_GROUPS, ...PACK_GROUPS].flatMap((g) => g.items).map((i) => [i.kind, i]),
 )
+
+/** Makes an event's custom objects known to the catalog (they travel with the plan). */
+export function registerCustomItems(items: CustomItem[] | undefined) {
+  for (const c of items ?? []) {
+    CATALOG[c.kind] = { kind: c.kind, name: c.name, layer: c.layer, shape: c.round ? 'circle' : 'rect', w: c.w, h: c.h, color: c.color }
+  }
+}
 
 export const isTableKind = (kind: string) => {
   const s = CATALOG[kind]?.shape

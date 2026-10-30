@@ -4,6 +4,7 @@ import { usePlanStore } from '../store/usePlanStore'
 import { dist } from '../lib/geometry'
 import type { Plan } from '../types'
 import { SatelliteSection } from './SatelliteSection'
+import { activeLevel, levelsOf, setVenue, venueOf } from '../lib/levels'
 
 export function VenuePanel() {
   const s = usePlanStore()
@@ -12,14 +13,18 @@ export function VenuePanel() {
   const jsonRef = useRef<HTMLInputElement>(null)
   const [known, setKnown] = useState('6')
   const up = (patch: Partial<Plan>) => s.mutate((p) => ({ ...p, ...patch }))
-  const bm = plan.basemap
+  // Footprint and drawing belong to the level on screen
+  const venue = venueOf(plan, s.levelId)
+  const upVenue = (patch: Parameters<typeof setVenue>[2], record = true) => s.mutate((p) => setVenue(p, s.levelId, patch), record)
+  const multiLevel = levelsOf(plan).length > 1
+  const bm = venue.basemap
 
   const onImage = (f: File) => {
     const r = new FileReader()
     r.onload = () => {
       const img = new Image()
       img.onload = () => {
-        up({ basemap: { src: r.result as string, widthM: plan.widthM, aspect: img.width / img.height, x: 0, y: 0, opacity: 0.5 } })
+        upVenue({ basemap: { src: r.result as string, widthM: venue.widthM, aspect: img.width / img.height, x: 0, y: 0, opacity: 0.5 } })
         s.set({ showBasemap: true })
       }
       img.src = r.result as string
@@ -35,12 +40,12 @@ export function VenuePanel() {
     const d = dist(m.a, m.b)
     if (d < 0.01) return
     const f = k / d
-    up({ basemap: { ...bm, widthM: +(bm.widthM * f).toFixed(3) } })
+    upVenue({ basemap: { ...bm, widthM: +(bm.widthM * f).toFixed(3) } })
     s.set({ measure: null, tool: 'select' })
   }
 
   if (viewOnly)
-    return <div className="p-4 text-sm"><div className="eyebrow">Venue</div><p>{plan.venue}</p><p className="text-muted">{plan.widthM} × {plan.heightM} m</p></div>
+    return <div className="p-4 text-sm"><div className="eyebrow">Venue</div><p>{plan.venue}</p><p className="text-muted">{venue.widthM} × {venue.heightM} m</p></div>
 
   return (
     <div className="space-y-5 p-4 text-sm">
@@ -52,13 +57,29 @@ export function VenuePanel() {
       </section>
 
       <section className="space-y-2">
-        <div className="eyebrow">Venue footprint & rules</div>
+        <div className="eyebrow">{multiLevel ? `Footprint · ${activeLevel(plan, s.levelId).name}` : 'Venue footprint & rules'}</div>
         <div className="grid grid-cols-3 gap-2">
-          <label><span className="text-[11px] text-muted">Width m</span><input className="input font-mono" type="number" value={plan.widthM} onChange={(e) => up({ widthM: Math.max(5, +e.target.value) })} /></label>
-          <label><span className="text-[11px] text-muted">Depth m</span><input className="input font-mono" type="number" value={plan.heightM} onChange={(e) => up({ heightM: Math.max(5, +e.target.value) })} /></label>
+          <label><span className="text-[11px] text-muted">Width m</span><input className="input font-mono" type="number" value={venue.widthM} onChange={(e) => upVenue({ widthM: Math.max(5, +e.target.value) })} /></label>
+          <label><span className="text-[11px] text-muted">Depth m</span><input className="input font-mono" type="number" value={venue.heightM} onChange={(e) => upVenue({ heightM: Math.max(5, +e.target.value) })} /></label>
           <label><span className="text-[11px] text-muted">Min aisle m</span><input className="input font-mono" type="number" step={0.1} value={plan.minAisleM} onChange={(e) => up({ minAisleM: Math.max(0, +e.target.value) })} /></label>
         </div>
         <p className="text-[11px] text-muted">Aisle check measures chair-back to chair-back (table + 0.75 m chair zone). Confirm the minimum with local civil protection rules.</p>
+        {multiLevel && <p className="text-[11px] text-muted">Each level can have its own footprint and drawing; switch levels from the menu next to the event name.</p>}
+      </section>
+
+      <section className="space-y-2">
+        <div className="eyebrow">Cell references</div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="accent-[#1ea7e8]" checked={!!plan.gridRef?.show}
+            onChange={(e) => up({ gridRef: { cellM: plan.gridRef?.cellM ?? 10, show: e.target.checked } })} />
+          Show A1, B2… cells on the plan and in exports
+        </label>
+        {plan.gridRef?.show && (
+          <label className="flex items-center gap-2 text-xs text-muted">Cell size
+            <input type="number" min={1} step={1} className="input w-20 font-mono" value={plan.gridRef.cellM}
+              onChange={(e) => up({ gridRef: { show: true, cellM: Math.max(1, +e.target.value || 10) } })} /> m
+          </label>
+        )}
       </section>
 
       <SatelliteSection />
@@ -71,11 +92,11 @@ export function VenuePanel() {
           <>
             <label className="block"><span className="text-[11px] text-muted">Opacity {Math.round(bm.opacity * 100)}%</span>
               <input type="range" min={0} max={1} step={0.05} className="w-full accent-[#1ea7e8]" value={bm.opacity}
-                onChange={(e) => s.mutate((p) => ({ ...p, basemap: { ...bm, opacity: +e.target.value } }), false)} /></label>
+                onChange={(e) => upVenue({ basemap: { ...bm, opacity: +e.target.value } }, false)} /></label>
             <div className="grid grid-cols-3 gap-2">
-              <label><span className="text-[11px] text-muted">Real width m</span><input className="input font-mono" type="number" step={0.1} value={bm.widthM} onChange={(e) => up({ basemap: { ...bm, widthM: +e.target.value } })} /></label>
-              <label><span className="text-[11px] text-muted">Offset X</span><input className="input font-mono" type="number" step={0.1} value={bm.x} onChange={(e) => up({ basemap: { ...bm, x: +e.target.value } })} /></label>
-              <label><span className="text-[11px] text-muted">Offset Y</span><input className="input font-mono" type="number" step={0.1} value={bm.y} onChange={(e) => up({ basemap: { ...bm, y: +e.target.value } })} /></label>
+              <label><span className="text-[11px] text-muted">Real width m</span><input className="input font-mono" type="number" step={0.1} value={bm.widthM} onChange={(e) => upVenue({ basemap: { ...bm, widthM: +e.target.value } })} /></label>
+              <label><span className="text-[11px] text-muted">Offset X</span><input className="input font-mono" type="number" step={0.1} value={bm.x} onChange={(e) => upVenue({ basemap: { ...bm, x: +e.target.value } })} /></label>
+              <label><span className="text-[11px] text-muted">Offset Y</span><input className="input font-mono" type="number" step={0.1} value={bm.y} onChange={(e) => upVenue({ basemap: { ...bm, y: +e.target.value } })} /></label>
             </div>
             <div className="rounded-lg bg-bg p-3">
               <div className="mb-1 flex items-center gap-1 font-semibold"><Ruler size={14} />Calibrate scale</div>
@@ -90,7 +111,7 @@ export function VenuePanel() {
                 <button className="btn btn-primary" disabled={!s.measure} onClick={calibrate}>Apply</button>
               </div>
             </div>
-            <button className="btn text-red-600" onClick={() => up({ basemap: undefined })}>Remove basemap</button>
+            <button className="btn text-red-600" onClick={() => upVenue({ basemap: undefined })}>Remove basemap</button>
           </>
         )}
       </section>
@@ -106,7 +127,7 @@ export function VenuePanel() {
           if (!Array.isArray(p?.elements) || !p.layers) { alert('Invalid project file'); return }
           await s.importPlan(p)
         }} />
-        <button className="btn w-full" onClick={() => void s.newEvent()}>
+        <button className="btn w-full" onClick={() => s.set({ dialog: 'templates' })}>
           <Plus size={15} />New event
         </button>
         <p className="text-[11px] text-muted">Events are saved in this browser. Switch between them from the menu next to the event name.</p>

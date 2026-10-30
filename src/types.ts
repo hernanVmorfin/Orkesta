@@ -3,7 +3,7 @@ export type LayerId =
   | 'security' | 'workforce' | 'wayfinding' | 'decor' | 'notes'
 
 export type Shape =
-  | 'roundTable' | 'rectTable' | 'cocktail' | 'rect' | 'icon' | 'zone' | 'plant' | 'line' | 'text'
+  | 'roundTable' | 'rectTable' | 'cocktail' | 'rect' | 'icon' | 'zone' | 'plant' | 'line' | 'text' | 'circle'
 
 export interface Pt { x: number; y: number }
 

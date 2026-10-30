@@ -4,6 +4,7 @@ import { usePlanStore, seatsUsed } from '../store/usePlanStore'
 import { CATALOG, LAYERS, isTableKind } from '../lib/catalog'
 import { CALCS, calcInputs, calcOf } from '../lib/calcs'
 import { fmtArea, fmtLen, pathLength, polygonArea } from '../lib/shapes'
+import { cellRef } from '../lib/gridref'
 import type { ElementStyle, LinePattern, ObjectSetup, PlanElement } from '../types'
 
 function Num({ label, value, onChange, step = 0.1, disabled }: { label: string; value: number; onChange: (v: number) => void; step?: number; disabled?: boolean }) {
@@ -68,7 +69,7 @@ export function Inspector() {
   return (
     <div className="space-y-4 p-4">
       <div>
-        <div className="eyebrow">{c?.name ?? e.kind} · {LAYERS.find((l) => l.id === e.layer)?.name}</div>
+        <div className="eyebrow">{c?.name ?? e.kind} · {LAYERS.find((l) => l.id === e.layer)?.name}{cellRef(s.plan, e) ? ` · cell ${cellRef(s.plan, e)}` : ''}</div>
         <input className="mt-1 w-full bg-transparent text-lg font-semibold outline-none" disabled={ro} value={e.label} onChange={(ev) => up({ label: ev.target.value })} />
       </div>
       <div className="grid grid-cols-2 gap-2">

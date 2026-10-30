@@ -76,7 +76,7 @@ export function EventsMenu() {
               </>
             )}
             <div className="mt-1 border-t border-bg-2 pt-1">
-              <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-bg" onClick={() => act(s.newEvent)}><Plus size={15} />New event</button>
+              <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-bg" onClick={() => { setOpen(false); s.set({ dialog: 'templates' }) }}><Plus size={15} />New event…</button>
               <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-bg" onClick={() => act(s.duplicateEvent)}><Copy size={15} />Duplicate this event</button>
             </div>
           </div>

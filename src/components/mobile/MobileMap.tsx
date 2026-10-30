@@ -6,6 +6,7 @@ import { isTableKind } from '../../lib/catalog'
 import { canvasRef, requestFit, requestFocus } from '../../lib/canvas'
 import type { PlanElement } from '../../types'
 import { ObjectSheet } from './Sheets'
+import { activeLevel, levelsOf } from '../../lib/levels'
 
 interface Result { key: string; label: string; sub: string; table?: PlanElement; guestId: string | null }
 
@@ -18,6 +19,7 @@ export function MobileMap({ foundGuest, setFoundGuest }: { foundGuest: string | 
   const { plan } = s
   const [q, setQ] = useState('')
   const selected = plan.elements.find((e) => e.id === s.selection[0])
+  const levels = levelsOf(plan)
 
   const results = useMemo<Result[]>(() => {
     const k = q.trim().toLowerCase()
@@ -41,7 +43,7 @@ export function MobileMap({ foundGuest, setFoundGuest }: { foundGuest: string | 
     setQ('')
     setFoundGuest(r.guestId)
     if (!r.table) { toast(`${r.label} has no table yet`); return }
-    s.set({ selection: [r.table.id], highlightTable: r.table.id })
+    s.set({ selection: [r.table.id], highlightTable: r.table.id, levelId: r.table.levelId ?? s.levelId })
     requestFocus({ x: r.table.x, y: r.table.y, zoom: 28 })
   }
 
@@ -91,6 +93,16 @@ export function MobileMap({ foundGuest, setFoundGuest }: { foundGuest: string | 
         )}
       </div>
 
+      {levels.length > 1 && !q.trim() && (
+        <div className="absolute left-3 right-16 top-16 z-10 flex gap-1 overflow-x-auto">
+          {levels.map((l) => (
+            <button key={l.id} onClick={() => s.set({ levelId: l.id, selection: [] })}
+              className={`h-9 shrink-0 rounded-full border px-3 text-sm shadow-sm ${l.id === activeLevel(plan, s.levelId).id ? 'border-ink bg-ink text-on-ink' : 'border-bg-2 bg-white text-ink-2'}`}>
+              {l.name}
+            </button>
+          ))}
+        </div>
+      )}
       {selected && <ObjectSheet e={selected} foundGuest={foundGuest} onClose={() => { setFoundGuest(null); s.set({ selection: [], highlightTable: null }) }} />}
     </div>
   )

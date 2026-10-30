@@ -191,6 +191,17 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
     case 'cocktail':
       body = <circle r={e.w / 2} fill="#ffffff" stroke="#5b6576" strokeWidth={0.05} />
       break
+    case 'circle':
+      body = (
+        <>
+          <ellipse rx={e.w / 2} ry={e.h / 2} fill={color} fillOpacity={e.style?.fillOpacity ?? 0.9} />
+          {showLabels && Math.min(e.w, e.h) > 0.6 && (
+            <text textAnchor="middle" dominantBaseline="middle" fontFamily={FONT} fontSize={Math.min(0.6, Math.min(e.w, e.h) * 0.22)}
+              fill="#0a1729" stroke="#ffffff" strokeWidth={0.05} paintOrder="stroke" transform={`rotate(${-e.rotation})`}>{e.label}</text>
+          )}
+        </>
+      )
+      break
     case 'plant':
       body = (
         <g>

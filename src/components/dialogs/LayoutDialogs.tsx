@@ -3,7 +3,8 @@ import { usePlanStore } from '../../store/usePlanStore'
 import { canvasRef } from '../../lib/canvas'
 import { CATALOG } from '../../lib/catalog'
 import { currentLevel } from '../../lib/levels'
-import type { PlanElement, Pt } from '../../types'
+import { blockSize, seatBlock, type BlockStyle } from '../../lib/layouts'
+import type { Pt } from '../../types'
 import { Modal, NumField } from './Modal'
 
 /** Plan point at the middle of what's on screen. */
@@ -44,8 +45,6 @@ export function RepeatDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-type BlockStyle = 'theatre' | 'classroom'
-
 /** Rows of chairs (theatre) or tables with chairs behind them (classroom), with aisles, as one folder. */
 export function SeatBlockDialog({ onClose }: { onClose: () => void }) {
   const s = usePlanStore()
@@ -63,35 +62,14 @@ export function SeatBlockDialog({ onClose }: { onClose: () => void }) {
     setRowGap(v === 'theatre' ? 0.9 : 1.5)
     setSeatW(v === 'theatre' ? 0.5 : 0.6)
   }
-  const aisles = aisleEvery > 0 ? Math.ceil(perRow / aisleEvery) - 1 : 0
-  const width = perRow * seatW + aisles * aisleW
-  const depth = rows * rowGap
+  const opts = { style, rows, perRow, seatW, rowGap, aisleEvery, aisleW, perTable }
+  const { width, depth } = blockSize(opts)
   const seats = rows * perRow
 
   const create = () => {
-    const level = currentLevel(s.plan, s.levelId)
-    const els: Omit<PlanElement, 'id'>[] = []
-    const xOf = (k: number) => k * seatW + (aisleEvery > 0 ? Math.floor(k / aisleEvery) * aisleW : 0)
-    for (let r = 0; r < rows; r++) {
-      const y = r * rowGap
-      if (style === 'classroom') {
-        // One table per run of `perTable` seats, never across an aisle
-        for (let k = 0; k < perRow; k += perTable) {
-          const runEnd = Math.min(perRow, k + perTable, aisleEvery > 0 ? (Math.floor(k / aisleEvery) + 1) * aisleEvery : Infinity)
-          const n = runEnd - k
-          const x0 = xOf(k)
-          els.push({ kind: 'classroom-table', label: '', x: x0 + (n * seatW) / 2, y, w: n * seatW, h: 0.5, rotation: 0, layer: 'seating', levelId: level })
-          k = runEnd - perTable
-        }
-      }
-      for (let k = 0; k < perRow; k++) {
-        els.push({ kind: 'chair', label: 'Chair', x: xOf(k) + seatW / 2, y: style === 'classroom' ? y + 0.5 : y, w: 0.45, h: 0.45, rotation: 0, layer: 'seating', levelId: level })
-      }
-    }
-    // Center the block on the view
+    // Centered on the view, as one folder
     const c = viewCenter()
-    const dx = c.x - width / 2, dy = c.y - depth / 2
-    s.addElements(els.map((e) => ({ ...e, x: +(e.x + dx).toFixed(3), y: +(e.y + dy).toFixed(3) })))
+    s.addElements(seatBlock(opts, c.x - width / 2, c.y - depth / 2, currentLevel(s.plan, s.levelId)))
     s.groupSelected(`${style === 'theatre' ? 'Theatre' : 'Classroom'} block · ${seats} seats`)
     onClose()
   }

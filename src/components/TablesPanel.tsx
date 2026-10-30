@@ -76,7 +76,7 @@ export function TablesPanel() {
             const tc = tagById.get(t.tag ?? '')?.color ?? '#1ea7e8'
             return (
               <button key={t.id} title={`${t.label} · ${u}/${t.seats}`}
-                onClick={() => s.set({ selection: [t.id], highlightTable: t.id })}
+                onClick={() => s.set({ selection: [t.id], highlightTable: t.id, levelId: t.levelId ?? s.levelId })}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   const id = e.dataTransfer.getData('application/x-guest')

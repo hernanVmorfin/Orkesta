@@ -11,6 +11,7 @@ import { download, guestsToCsv } from '../lib/csv'
 import { inventoryCsv } from '../lib/inventoryCsv'
 import { ShareDialog } from './ShareDialog'
 import { EventsMenu } from './EventsMenu'
+import { LevelMenu } from './LevelMenu'
 import { AccountMenu } from './team/AccountMenu'
 
 // jsPDF and html2canvas are large; load them only when an export runs
@@ -67,6 +68,7 @@ export function TopBar() {
         <div className="truncate text-[11px] text-muted">{s.plan.venue}{s.plan.date ? ` · ${s.plan.date}` : ''}</div>
       </div>
       {!s.linkViewOnly && <EventsMenu />}
+      <LevelMenu />
 
       {!s.viewOnly && (
         <div className="ml-1 flex items-center gap-1 xl:ml-4">

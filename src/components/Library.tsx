@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Search, ChevronDown, Armchair, Plus } from 'lucide-react'
-import { LIBRARY_GROUPS } from '../lib/catalog'
+import { CATALOG, LIBRARY_GROUPS, PACK_GROUPS } from '../lib/catalog'
+import { toast } from '../lib/toast'
 import { ICONS } from '../lib/icons'
 import type { CatalogItem } from '../types'
 import { usePlanStore } from '../store/usePlanStore'
@@ -32,16 +33,26 @@ function Thumb({ item }: { item: CatalogItem }) {
   if (item.shape === 'roundTable' || item.shape === 'cocktail' || item.shape === 'plant')
     return <span className="h-7 w-7 rounded-full border-2" style={{ borderColor: item.shape === 'plant' ? '#16a34a' : '#1ea7e8', background: item.shape === 'plant' ? '#22c55e' : '#fff' }} />
   if (item.shape === 'zone') return <span className="h-6 w-8 rounded border-2 border-dashed" style={{ borderColor: item.color }} />
+  if (item.shape === 'circle') return <span className="h-7 w-7 rounded-full" style={{ background: item.color }} />
   const r = Math.min(item.w / item.h, 3)
   return <span className="rounded-sm" style={{ background: item.shape === 'rectTable' ? '#fff' : item.color, border: item.shape === 'rectTable' ? '2px solid #1ea7e8' : undefined, width: r >= 1 ? 32 : 32 * r + 6, height: r >= 1 ? Math.max(6, 32 / r) : 28 }} />
 }
 
 export function Library() {
   const [q, setQ] = useState('')
-  const [closed, setClosed] = useState<Record<string, boolean>>({})
+  // Packs start folded so the everyday objects stay near the top
+  const [closed, setClosed] = useState<Record<string, boolean>>(() => Object.fromEntries(PACK_GROUPS.map((g) => [g.id, true])))
   const placing = usePlanStore((s) => s.placing)
   const set = usePlanStore((s) => s.set)
+  const custom = usePlanStore((s) => s.plan.customItems)
+  const elements = usePlanStore((s) => s.plan.elements)
+  const mutate = usePlanStore((s) => s.mutate)
   const wide = useIsWide()
+  const customGroup = custom?.length ? [{ id: 'custom', name: 'This event’s custom objects', items: custom.map((c) => CATALOG[c.kind]).filter(Boolean) }] : []
+  const removeCustom = (kind: string) => {
+    if (elements.some((e) => e.kind === kind)) { toast('It’s on the plan. Delete those objects first.'); return }
+    mutate((p) => ({ ...p, customItems: p.customItems?.filter((c) => c.kind !== kind) }))
+  }
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-bg-2 bg-white">
@@ -61,7 +72,7 @@ export function Library() {
         </div>
       </div>
       <div className="panel-scroll flex-1 overflow-y-auto px-3 pb-4">
-        {LIBRARY_GROUPS.map((g) => {
+        {[...customGroup, ...LIBRARY_GROUPS, ...PACK_GROUPS].map((g) => {
           const items = g.items.filter((i) => !i.hidden && i.name.toLowerCase().includes(q.toLowerCase()))
           if (!items.length) return null
           const isClosed = closed[g.id] && !q
@@ -75,7 +86,12 @@ export function Library() {
               {!isClosed && (
                 <div className="grid grid-cols-3 gap-1.5">
                   {items.map((i) => (
-                    <button key={i.kind} draggable
+                    <div key={i.kind} className="group relative">
+                    {g.id === 'custom' && (
+                      <span role="button" title="Remove from this event's library" onClick={() => removeCustom(i.kind)}
+                        className="absolute right-0.5 top-0.5 z-10 hidden rounded bg-white/90 px-1 text-[10px] text-muted hover:text-red-600 group-hover:block">✕</span>
+                    )}
+                    <button draggable
                       onDragStart={(e) => e.dataTransfer.setData('application/x-kind', i.kind)}
                       // As a drawer (below 1280 px) the library gets out of the way so the plan can be tapped
                       onClick={() => set({ placing: placing === i.kind ? null : i.kind, tool: 'select', ...(wide ? {} : { showLibrary: false }) })}
@@ -84,6 +100,7 @@ export function Library() {
                       <span className="grid h-8 place-items-center"><Thumb item={i} /></span>
                       <span className="line-clamp-2 px-0.5 text-ink-2">{i.name}</span>
                     </button>
+                    </div>
                   ))}
                 </div>
               )}

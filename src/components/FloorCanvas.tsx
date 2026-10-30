@@ -9,6 +9,7 @@ import { canvasRef, type FocusRequest } from '../lib/canvas'
 import { toast } from '../lib/toast'
 import { isLockedEl, venueOf, visibleOnLevel } from '../lib/levels'
 import { ContextMenu, type MenuState } from './ContextMenu'
+import { colName } from '../lib/gridref'
 import { CommentsLayer } from './Comments'
 import { SATELLITE_ATTRIBUTION, planToLatLng, tileZoom, tilesFor } from '../lib/geo'
 import type { GeoAnchor, PlanElement, Pt } from '../types'
@@ -421,6 +422,7 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
               opacity={bm.opacity} preserveAspectRatio="none" />
           )}
           {s.showGrid && <Grid w={venue.widthM} h={venue.heightM} />}
+          {plan.gridRef?.show && <CellGrid w={venue.widthM} h={venue.heightM} cell={plan.gridRef.cellM} />}
           <rect width={venue.widthM} height={venue.heightM} fill="none" stroke="#0a1729" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
 
           {visible.map((e) => (
@@ -617,6 +619,22 @@ function ScaleBar({ zoom }: { zoom: number }) {
   )
 }
 
+
+/** Cell references: letters across the top, numbers down the side, inside the venue so exports keep them. */
+function CellGrid({ w, h, cell }: { w: number; h: number; cell: number }) {
+  if (cell <= 0 || w / cell > 200 || h / cell > 200) return null
+  const fs = Math.min(cell * 0.18, 1.6)
+  const cols = Math.ceil(w / cell), rows = Math.ceil(h / cell)
+  const style = { fontFamily: 'Geist, Arial', fontWeight: 600, fill: '#075e99', stroke: '#ffffff', strokeWidth: fs * 0.18, paintOrder: 'stroke' as const }
+  return (
+    <g className="cellgrid" pointerEvents="none">
+      {Array.from({ length: cols - 1 }, (_, i) => <line key={`cx${i}`} x1={(i + 1) * cell} y1={0} x2={(i + 1) * cell} y2={h} stroke="#075e99" strokeOpacity={0.45} strokeWidth={1.2} vectorEffect="non-scaling-stroke" />)}
+      {Array.from({ length: rows - 1 }, (_, i) => <line key={`cy${i}`} x1={0} y1={(i + 1) * cell} x2={w} y2={(i + 1) * cell} stroke="#075e99" strokeOpacity={0.45} strokeWidth={1.2} vectorEffect="non-scaling-stroke" />)}
+      {Array.from({ length: cols }, (_, i) => <text key={`c${i}`} x={Math.min(i * cell + cell / 2, w - fs)} y={fs * 1.1} textAnchor="middle" fontSize={fs} {...style}>{colName(i)}</text>)}
+      {Array.from({ length: rows }, (_, i) => <text key={`r${i}`} x={fs * 0.5} y={Math.min(i * cell + cell / 2, h - fs * 0.3)} dominantBaseline="middle" fontSize={fs} {...style}>{i + 1}</text>)}
+    </g>
+  )
+}
 
 function Grid({ w, h }: { w: number; h: number }) {
   const lines: React.ReactNode[] = []

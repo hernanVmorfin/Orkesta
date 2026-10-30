@@ -572,7 +572,7 @@ export const openMessages = () => setState({ rightTab: 'team', teamView: 'messag
  */
 export function showPin(pin: MessagePin, focus = true) {
   const e = pin.elementId ? state().plan.elements.find((x) => x.id === pin.elementId) : undefined
-  setState({ selection: e ? [e.id] : [], highlightTable: e && isTableKind(e.kind) ? e.id : null })
+  setState({ selection: e ? [e.id] : [], highlightTable: e && isTableKind(e.kind) ? e.id : null, ...(e ? { levelId: e.levelId ?? state().levelId } : {}) })
   const at = { x: e?.x ?? pin.x, y: e?.y ?? pin.y, zoom: 28 }
   if (focus) requestFocus(at)
   return at

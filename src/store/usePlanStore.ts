@@ -8,7 +8,8 @@ import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
 import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seating'
 import { normalize, selfIntersects } from '../lib/shapes'
-import { currentLevel } from '../lib/levels'
+import { BASE_LEVEL, currentLevel } from '../lib/levels'
+import { registerCustomItems } from '../lib/catalog'
 import type { Account, Invite, Member, Message, Role, SharedEventInfo, StaffGroup } from '../lib/backend'
 
 /** 'geo' drags the satellite under the plan to line it up with the venue; 'comment' drops comment pins. */
@@ -121,6 +122,11 @@ interface State {
   groupSelected: (name?: string) => string | null
   ungroup: (groupId: string) => void
   updateGroup: (groupId: string, patch: Partial<Group>) => void
+  addLevel: (name?: string) => void
+  renameLevel: (id: string, name: string) => void
+  duplicateLevel: (id: string) => void
+  moveLevel: (id: string, dir: -1 | 1) => void
+  deleteLevel: (id: string) => void
   addComment: (at: Pt, body: string) => void
   replyComment: (id: string, body: string) => void
   resolveComment: (id: string, resolved: boolean) => void
@@ -158,6 +164,20 @@ async function migrateLegacy() {
 }
 
 const clearHistory = { past: [], future: [], selection: [], highlightTable: null, measure: null, drawing: null, levelId: null }
+
+/**
+ * The plan with an explicit levels list. The first time a second level is added, every object and
+ * comment without a level is stamped with the first level's id, so reordering can't move them.
+ */
+function withLevels(p: Plan): Plan {
+  if (p.levels?.length) return p
+  return {
+    ...p,
+    levels: [{ id: BASE_LEVEL, name: 'Level 1' }],
+    elements: p.elements.map((e) => (e.levelId ? e : { ...e, levelId: BASE_LEVEL })),
+    comments: p.comments?.map((c) => (c.levelId ? c : { ...c, levelId: BASE_LEVEL })),
+  }
+}
 
 /** Comment author: the signed-in account, else a name remembered on this device. */
 function authorName() {
@@ -484,6 +504,59 @@ export const usePlanStore = create<State>((set, get) => ({
   updateGroup: (groupId, patch) => get().mutate((p) => ({
     ...p, groups: (p.groups ?? []).map((g) => (g.id === groupId ? { ...g, ...patch } : g)),
   }), patch.name === undefined),
+  addLevel: (name) => {
+    const id = nanoid(8)
+    get().mutate((p) => {
+      const levels = withLevels(p)
+      return { ...levels, levels: [...levels.levels!, { id, name: name ?? `Level ${levels.levels!.length + 1}` }] }
+    })
+    set({ levelId: id, selection: [] })
+  },
+  renameLevel: (id, name) => get().mutate((p) => ({ ...withLevels(p), levels: withLevels(p).levels!.map((l) => (l.id === id ? { ...l, name } : l)) })),
+  duplicateLevel: (id) => {
+    const nid = nanoid(8)
+    get().mutate((p) => {
+      const q = withLevels(p)
+      const src = q.levels!.find((l) => l.id === id)!
+      const base = src.id === BASE_LEVEL ? { widthM: q.widthM, heightM: q.heightM, basemap: q.basemap } : { widthM: src.widthM, heightM: src.heightM, basemap: src.basemap }
+      // Copy the level's folders and objects; tables get new numbers
+      const groupMap = new Map<string, string>()
+      const groups = (q.groups ?? []).filter((g) => q.elements.some((e) => e.levelId === id && e.groupId === g.id))
+        .map((g) => { const gid = nanoid(8); groupMap.set(g.id, gid); return { ...g, id: gid } })
+      let num = Math.max(0, ...q.elements.map((e) => e.number ?? 0))
+      const copies = q.elements.filter((e) => e.levelId === id).map((e) => {
+        const n = e.number != null ? ++num : undefined
+        return { ...e, id: nanoid(8), levelId: nid, groupId: e.groupId ? groupMap.get(e.groupId) : undefined, number: n, label: n != null ? `Table ${n}` : e.label }
+      })
+      const idx = q.levels!.findIndex((l) => l.id === id)
+      const levels = [...q.levels!]
+      levels.splice(idx + 1, 0, { id: nid, name: `${src.name} (copy)`, ...base })
+      return { ...q, levels, groups: [...(q.groups ?? []), ...groups], elements: [...q.elements, ...copies] }
+    })
+    set({ levelId: nid, selection: [] })
+  },
+  moveLevel: (id, dir) => get().mutate((p) => {
+    const levels = [...withLevels(p).levels!]
+    const i = levels.findIndex((l) => l.id === id), j = i + dir
+    if (i < 0 || j < 0 || j >= levels.length) return p
+    ;[levels[i], levels[j]] = [levels[j], levels[i]]
+    return { ...withLevels(p), levels }
+  }),
+  deleteLevel: (id) => {
+    const p0 = get().plan
+    if ((p0.levels?.length ?? 1) < 2) return
+    get().mutate((p) => {
+      const gone = new Set(p.elements.filter((e) => (e.levelId ?? BASE_LEVEL) === id).map((e) => e.id))
+      return {
+        ...p,
+        levels: p.levels!.filter((l) => l.id !== id),
+        elements: p.elements.filter((e) => !gone.has(e.id)),
+        guests: p.guests.map((g) => (g.tableId && gone.has(g.tableId) ? { ...g, tableId: null } : g)),
+        comments: p.comments?.filter((c) => (c.levelId ?? BASE_LEVEL) !== id),
+      }
+    })
+    set({ levelId: null, selection: [] })
+  },
   addComment: (at, body) => {
     const id = nanoid(8)
     get().mutate((p) => ({
@@ -575,6 +648,12 @@ usePlanStore.subscribe((s, prev) => {
   pending = s.plan
   clearTimeout(t)
   t = setTimeout(() => { void flushSave() }, 400)
+})
+
+// Custom objects travel with the plan; make them known to the catalog whenever they change
+registerCustomItems(init.plan.customItems)
+usePlanStore.subscribe((s, prev) => {
+  if (s.plan.customItems !== prev.plan.customItems) registerCustomItems(s.plan.customItems)
 })
 
 // Shared events can only be edited by their admins
