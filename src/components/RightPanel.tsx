@@ -4,7 +4,9 @@ import { Inspector } from './Inspector'
 import { TablesPanel } from './TablesPanel'
 import { LayersPanel } from './LayersPanel'
 import { VenuePanel } from './VenuePanel'
-import { OpsPanel } from './OpsPanel'
+import { lazy, Suspense } from 'react'
+
+const OpsPanel = lazy(() => import('./OpsPanel').then((m) => ({ default: m.OpsPanel })))
 import { TeamPanel } from './team/TeamPanel'
 
 const TABS: { id: RightTab; label: string }[] = [
@@ -38,7 +40,7 @@ export function RightPanel() {
         {tab === 'inspect' && <Inspector />}
         {tab === 'layers' && <LayersPanel />}
         {tab === 'venue' && <VenuePanel />}
-        {tab === 'ops' && <OpsPanel />}
+        {tab === 'ops' && <Suspense fallback={<p className="p-4 text-sm text-muted">Loading…</p>}><OpsPanel /></Suspense>}
         {tab === 'team' && !linkViewOnly && <TeamPanel onShowPin={(pin) => { showPin(pin) }} />}
       </div>
     </aside>

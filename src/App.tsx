@@ -11,11 +11,13 @@ import { requestFit } from './lib/canvas'
 import { toast as showToast } from './lib/toast'
 import { selectableIds } from './lib/levels'
 import { Dialogs } from './components/dialogs/Dialogs'
+import { PasswordGate } from './components/PasswordGate'
 import { MOBILE_QUERY, useIsMobile, useIsWide } from './lib/useMediaQuery'
 
 export default function App() {
   const viewOnly = usePlanStore((s) => s.viewOnly)
   const hydrated = usePlanStore((s) => s.hydrated)
+  const locked = usePlanStore((s) => !!s.lockedShare)
   const showLibrary = usePlanStore((s) => s.showLibrary)
   const showPanel = usePlanStore((s) => s.showPanel)
   const isMobile = useIsMobile()
@@ -108,6 +110,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  if (locked) return <PasswordGate />
   if (!hydrated) return <div className="grid h-full place-items-center text-sm text-muted">Loading your events…</div>
 
   return (

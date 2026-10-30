@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import type { Group, Guest, LayerId, LayerState, Plan, PlanElement, Pt } from '../types'
 import { CATALOG, isTableKind } from '../lib/catalog'
 import { blankPlan } from '../data/blankPlan'
-import { readShared } from '../lib/share'
+import { decryptShared, readShared } from '../lib/share'
 import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
 import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seating'
@@ -63,6 +63,10 @@ interface State {
   highlightTable: string | null
   /** False until the current event has been read from IndexedDB. */
   hydrated: boolean
+  /** A password-protected link waiting for its password */
+  lockedShare: { payload: string; viewOnly: boolean } | null
+  /** Decrypts a protected link; false when the password is wrong. */
+  unlockShare: (password: string) => Promise<boolean>
   saveState: SaveState
   events: EventSummary[]
 
@@ -143,9 +147,9 @@ interface State {
 
 const touch = (p: Plan): Plan => ({ ...p, updatedAt: Date.now() })
 
-/** View-only links render straight from the URL; everything else waits for `hydrate`. */
-const shared = readShared()
-const init = shared?.viewOnly ? shared : { plan: blankPlan(), viewOnly: false }
+/** View-only links render straight from the URL; password links wait for the password; everything else waits for `hydrate`. */
+let shared = readShared()
+const init = shared?.viewOnly && shared.plan ? { plan: shared.plan, viewOnly: true } : { plan: blankPlan(), viewOnly: false }
 
 const rememberCurrent = (id: string) => {
   try { localStorage.setItem(CURRENT_KEY, id) } catch { /* storage unavailable */ }
@@ -223,6 +227,23 @@ export const usePlanStore = create<State>((set, get) => ({
   rightTab: 'tables',
   highlightTable: null,
   hydrated: init.viewOnly,
+  lockedShare: shared?.encrypted ? { payload: shared.encrypted, viewOnly: shared.viewOnly } : null,
+  unlockShare: async (password) => {
+    const ls = get().lockedShare
+    if (!ls) return true
+    const plan = await decryptShared(ls.payload, password)
+    if (!plan) return false
+    if (ls.viewOnly) {
+      set({ plan, linkViewOnly: true, viewOnly: true, hydrated: true, lockedShare: null })
+      return true
+    }
+    // Editable copy: import it as a new event like an unprotected link
+    shared = { plan, viewOnly: false }
+    hydrating = undefined
+    set({ lockedShare: null })
+    await get().hydrate()
+    return true
+  },
   saveState: 'saved',
   events: [],
   account: null,
@@ -241,11 +262,11 @@ export const usePlanStore = create<State>((set, get) => ({
       ? { past: [...s.past.slice(-HISTORY_LIMIT), s.plan], future: [], plan: touch(fn(s.plan)) }
       : { plan: touch(fn(s.plan)) })),
   hydrate: () => (hydrating ??= (async () => {
-    if (get().hydrated) return
+    if (get().hydrated || get().lockedShare) return
     let plan: Plan | undefined
     let events: EventSummary[] = []
     try {
-      if (shared) {
+      if (shared?.plan) {
         // Editable copy from a link: keep it as its own event and drop the hash so a reload doesn't import it again
         plan = { ...shared.plan, id: nanoid(10), updatedAt: Date.now(), shared: undefined }
         await db.savePlan(plan)
@@ -623,9 +644,22 @@ async function persist(plan: Plan) {
     await db.savePlan(plan)
     const sum = db.summarize(plan)
     usePlanStore.setState((s) => ({ saveState: 'saved', events: [sum, ...s.events.filter((e) => e.id !== sum.id)] }))
+    void autoVersion(plan)
   } catch {
     usePlanStore.setState({ saveState: 'error' })
   }
+}
+
+// Version history: an automatic snapshot at most every 30 minutes while an event is being edited
+const AUTO_EVERY = 30 * 60_000
+const lastAuto = new Map<string, number>()
+async function autoVersion(plan: Plan) {
+  try {
+    if (!lastAuto.has(plan.id)) lastAuto.set(plan.id, (await db.listVersions(plan.id)).find((v) => v.auto)?.createdAt ?? 0)
+    if (Date.now() - (lastAuto.get(plan.id) ?? 0) < AUTO_EVERY) return
+    lastAuto.set(plan.id, Date.now())
+    await db.saveVersion(plan, 'Autosave', true)
+  } catch { /* history is best effort */ }
 }
 
 /** Writes any debounced edit now (before switching events). */
