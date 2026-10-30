@@ -24,7 +24,8 @@ function leanPlan(plan: Plan, viewOnly: boolean, guestNames: boolean): Plan {
 }
 
 const linkFor = (data: string, viewOnly: boolean, encrypted = false) => {
-  const url = new URL(window.location.href)
+  // From the app's root, so a link made inside an event doesn't carry that event's address
+  const url = new URL('/', window.location.href)
   url.hash = `plan=${data}${encrypted ? '&enc=1' : ''}${viewOnly ? '&mode=view' : ''}`
   return url.toString()
 }

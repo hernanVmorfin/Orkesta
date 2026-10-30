@@ -391,7 +391,7 @@ export async function openShared(eventId: string) {
   }
 }
 
-export const inviteUrl = (token: string) => `${window.location.origin}${window.location.pathname}#invite=${token}`
+export const inviteUrl = (token: string) => `${window.location.origin}/#invite=${token}`
 
 /** Reads an invite token from the address (#invite=…) and removes it, so a reload doesn't use it again. */
 export function takeInviteToken() {
@@ -400,10 +400,10 @@ export function takeInviteToken() {
   return token
 }
 
-/** Joins an event from an invite link and opens it. */
+/** Joins an event from an invite link and opens it. Returns whether it worked. */
 export async function acceptInvite(token: string) {
   const b = backend
-  if (!b) return
+  if (!b) return false
   await publishNow()
   try {
     const { eventId, role } = await b.acceptInvite(token)
@@ -412,8 +412,10 @@ export async function acceptInvite(token: string) {
     cacheRole(eventId, role)
     await openShared(eventId)
     toast(role === 'admin' ? 'You joined this event as an admin.' : 'You joined this event as staff.')
+    return state().plan.id === eventId
   } catch (err) {
     toast(errorText(err))
+    return false
   }
 }
 

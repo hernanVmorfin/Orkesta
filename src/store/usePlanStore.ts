@@ -10,6 +10,8 @@ import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seati
 import { normalize, selfIntersects } from '../lib/shapes'
 import { BASE_LEVEL, currentLevel } from '../lib/levels'
 import { registerCustomItems } from '../lib/catalog'
+import { parseRoute, pathFor, type View } from '../lib/route'
+import { toast } from '../lib/toast'
 import type { Account, Invite, Member, Message, Role, SharedEventInfo, StaffGroup } from '../lib/backend'
 
 /** 'geo' drags the satellite under the plan to line it up with the venue; 'comment' drops comment pins. */
@@ -26,6 +28,10 @@ const CURRENT_KEY = 'inbest-floorplan:current'
 const HISTORY_LIMIT = 100
 
 interface State {
+  /** the hub (all events) or the open event */
+  view: View
+  /** what the New event dialog starts from: 'blank', 'drawing' or a template id */
+  newEventStart: string
   plan: Plan
   past: Plan[]
   future: Plan[]
@@ -53,7 +59,7 @@ interface State {
   /** Level being shown; null = the first */
   levelId: string | null
   /** Modal dialogs opened from menus */
-  dialog: 'repeat' | 'seatBlock' | 'templates' | 'schedule' | 'history' | 'customItem' | 'export' | null
+  dialog: 'repeat' | 'seatBlock' | 'newEvent' | 'schedule' | 'history' | 'customItem' | 'export' | null
   showComments: boolean
   showResolved: boolean
   /** Open comment thread, or a new comment being written at a point */
@@ -97,6 +103,19 @@ interface State {
   importPlan: (p: Plan) => Promise<void>
   /** Saves a plan under its own id (a shared event from the server) and opens it. */
   openPlan: (p: Plan) => Promise<void>
+  /** Back to the hub; any pending edit is saved first. */
+  showHub: () => Promise<void>
+  /** Opens a saved event in the editor. */
+  enterEvent: (id: string) => Promise<void>
+  /** Adds a new event (blank, template, drawing) and opens it in the editor. */
+  startPlan: (p: Plan, then?: Partial<State>) => Promise<void>
+  renameEvent: (id: string, name: string) => Promise<void>
+  /** Copies an event without opening it; returns the copy's id. */
+  copyEvent: (id: string) => Promise<string | null>
+  archiveEvents: (ids: string[], archived: boolean) => Promise<void>
+  deleteEvents: (ids: string[]) => Promise<void>
+  /** Fills in thumbnails and counts for events saved before the hub. */
+  refreshSummaries: () => Promise<void>
   undo: () => void
   redo: () => void
 
@@ -150,6 +169,8 @@ const touch = (p: Plan): Plan => ({ ...p, updatedAt: Date.now() })
 /** View-only links render straight from the URL; password links wait for the password; everything else waits for `hydrate`. */
 let shared = readShared()
 const init = shared?.viewOnly && shared.plan ? { plan: shared.plan, viewOnly: true } : { plan: blankPlan(), viewOnly: false }
+/** Links always open their plan; otherwise the address decides between the hub and an event. */
+const initialView: View = shared ? 'editor' : parseRoute().view
 
 const rememberCurrent = (id: string) => {
   try { localStorage.setItem(CURRENT_KEY, id) } catch { /* storage unavailable */ }
@@ -198,6 +219,8 @@ let hydrating: Promise<void> | undefined
 export const seatsUsed = (plan: Plan, tableId: string) => plan.guests.filter((g) => g.tableId === tableId).length
 
 export const usePlanStore = create<State>((set, get) => ({
+  view: initialView,
+  newEventStart: 'blank',
   plan: init.plan,
   past: [],
   future: [],
@@ -265,6 +288,7 @@ export const usePlanStore = create<State>((set, get) => ({
     if (get().hydrated || get().lockedShare) return
     let plan: Plan | undefined
     let events: EventSummary[] = []
+    let missing = false
     try {
       if (shared?.plan) {
         // Editable copy from a link: keep it as its own event and drop the hash so a reload doesn't import it again
@@ -273,9 +297,11 @@ export const usePlanStore = create<State>((set, get) => ({
         history.replaceState(null, '', window.location.pathname + window.location.search)
       } else {
         await migrateLegacy()
-        let id: string | null = null
-        try { id = localStorage.getItem(CURRENT_KEY) } catch { /* storage unavailable */ }
+        const route = parseRoute()
+        let id: string | null = route.view === 'editor' ? route.id : null
+        if (!id) try { id = localStorage.getItem(CURRENT_KEY) } catch { /* storage unavailable */ }
         plan = id ? await db.getPlan(id) : undefined
+        missing = route.view === 'editor' && !plan
       }
       events = await db.listEvents()
       if (!plan && events[0]) plan = await db.getPlan(events[0].id)
@@ -284,7 +310,8 @@ export const usePlanStore = create<State>((set, get) => ({
     }
     plan ??= blankPlan()
     rememberCurrent(plan.id)
-    set({ plan, events, hydrated: true, ...clearHistory })
+    set({ plan, events, hydrated: true, ...(missing ? { view: 'hub' as const } : {}), ...clearHistory })
+    if (missing) toast('That event isn’t saved on this device.')
     navigator.storage?.persist?.().catch(() => {})
   })()),
   openEvent: async (id) => {
@@ -308,7 +335,7 @@ export const usePlanStore = create<State>((set, get) => ({
     if (!current) return
     const next = get().events[0]
     if (next) await get().openEvent(next.id)
-    else await get().newEvent()
+    else set({ plan: blankPlan(), ...clearHistory })
   },
   importPlan: async (p) => {
     await flushSave()
@@ -322,6 +349,55 @@ export const usePlanStore = create<State>((set, get) => ({
     rememberCurrent(plan.id)
     set({ plan, ...clearHistory })
     await persist(plan)
+  },
+  showHub: async () => {
+    await flushSave()
+    set({ view: 'hub', dialog: null, placing: null, drawing: null, measure: null, tool: 'select', selection: [], commentDraft: null, activeComment: null })
+  },
+  enterEvent: async (id) => {
+    await get().openEvent(id)
+    if (get().plan.id === id) set({ view: 'editor' })
+  },
+  startPlan: async (p, then) => {
+    await get().importPlan(p)
+    set({ view: 'editor', ...then })
+  },
+  renameEvent: async (id, name) => {
+    if (id === get().plan.id) { get().mutate((p) => ({ ...p, name })); return }
+    const p = await db.getPlan(id).catch(() => undefined)
+    if (!p) return
+    try {
+      const sum = await db.savePlan({ ...p, name, updatedAt: Date.now() })
+      set((s) => ({ events: [sum, ...s.events.filter((e) => e.id !== id)] }))
+    } catch { set({ saveState: 'error' }) }
+  },
+  copyEvent: async (id) => {
+    if (id === get().plan.id) await flushSave()
+    const p = id === get().plan.id ? get().plan : await db.getPlan(id).catch(() => undefined)
+    if (!p) return null
+    const copy: Plan = { ...p, id: nanoid(10), name: `${p.name} (copy)`, updatedAt: Date.now(), shared: undefined }
+    try {
+      const sum = await db.savePlan(copy)
+      set((s) => ({ events: [sum, ...s.events] }))
+      return copy.id
+    } catch { set({ saveState: 'error' }); return null }
+  },
+  archiveEvents: async (ids, archived) => {
+    try {
+      const changed = new Map((await db.setArchived(ids, archived)).map((e) => [e.id, e]))
+      set((s) => ({ events: s.events.map((e) => changed.get(e.id) ?? e) }))
+    } catch { set({ saveState: 'error' }) }
+  },
+  deleteEvents: async (ids) => {
+    for (const id of ids) await get().deleteEvent(id)
+  },
+  refreshSummaries: async () => {
+    const stale = get().events.filter((e) => !e.thumb || !e.counts)
+    if (!stale.length) return
+    try {
+      const fresh = new Map((await db.refreshSummaries(stale)).map((e) => [e.id, e]))
+      set((s) => ({ events: s.events.map((e) => fresh.get(e.id) ?? e) }))
+    } catch { /* thumbnails are best effort */ }
   },
   undo: () => set((s) => {
     const prev = s.past[s.past.length - 1]
@@ -641,8 +717,7 @@ let pending: Plan | null = null
 async function persist(plan: Plan) {
   usePlanStore.setState({ saveState: 'saving' })
   try {
-    await db.savePlan(plan)
-    const sum = db.summarize(plan)
+    const sum = await db.savePlan(plan)
     usePlanStore.setState((s) => ({ saveState: 'saved', events: [sum, ...s.events.filter((e) => e.id !== sum.id)] }))
     void autoVersion(plan)
   } catch {
@@ -694,4 +769,23 @@ usePlanStore.subscribe((s, prev) => {
 usePlanStore.subscribe((s) => {
   const viewOnly = s.linkViewOnly || (!!s.plan.shared && s.role !== 'admin')
   if (viewOnly !== s.viewOnly) usePlanStore.setState({ viewOnly, ...(viewOnly ? { placing: null, tool: 'select' as const, measure: null, drawing: null } : {}) })
+})
+
+// The address follows the view: entering or leaving an event adds a history entry (so Back returns
+// to the hub); switching events inside the editor replaces it.
+usePlanStore.subscribe((s, prev) => {
+  if (!s.hydrated || s.linkViewOnly || s.lockedShare) return
+  if (prev.hydrated && s.view === prev.view && s.plan.id === prev.plan.id) return
+  const path = pathFor(s.view, s.plan.id)
+  if (window.location.pathname === path) return
+  if (prev.hydrated && s.view !== prev.view) history.pushState(null, '', path)
+  else history.replaceState(null, '', path + window.location.hash)
+})
+
+window.addEventListener('popstate', () => {
+  const s = usePlanStore.getState()
+  if (!s.hydrated || s.linkViewOnly || s.lockedShare) return
+  const route = parseRoute()
+  if (route.view === 'hub') { if (s.view !== 'hub') void s.showHub(); return }
+  void s.enterEvent(route.id)
 })

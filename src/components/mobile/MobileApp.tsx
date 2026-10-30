@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { Map as MapIcon, Armchair, Users, Info, Eye, MessagesSquare, Gauge } from 'lucide-react'
+import { Map as MapIcon, Armchair, Users, Info, Eye, MessagesSquare, Gauge, ChevronLeft } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { showPin, useUnread } from '../../store/team'
 import { isTableKind } from '../../lib/catalog'
@@ -73,7 +73,11 @@ export function MobileApp() {
   return (
     <div className="flex h-full flex-col bg-white">
       <header className="flex shrink-0 items-center gap-3 border-b border-bg-2 px-4 pb-2.5" style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))' }}>
-        <img src="/brand/logo-inbest.png" alt="iNBest" className="h-5" />
+        {linkViewOnly ? <img src="/brand/logo-inbest.png" alt="iNBest" className="h-5" /> : (
+          <button aria-label="All events" className="-ml-2 grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink-2 active:bg-bg" onClick={() => void usePlanStore.getState().showHub()}>
+            <ChevronLeft size={22} />
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold text-ink">{plan.name}</div>
           <div className="truncate text-xs text-muted">{[plan.venue, plan.date].filter(Boolean).join(' · ') || 'No venue set'}</div>

@@ -389,3 +389,88 @@ On Azure (your original plan, now deferred) that means:
 - Web PubSub/SignalR, or polling, for live updates.
 
 **Next:** connect a server (needed for teams across devices), deploy, then real-device testing (section 10) on the hosted HTTPS build. The app can also be deployed before a server exists, but team features then only work within one browser.
+
+---
+
+## 12. Home hub (planned 2026-10-30)
+
+**Status (2026-10-30): H1–H3 are built on `feature/home-hub` and tested in the browser** (desktop and phone): hub, event addresses with Back/Forward, thumbnails (older events get theirs the first time the hub opens), New event dialog (templates, PDF drawing, place search), card menu, typed-name delete, archive, multi-select, filters, list view, and the phone hub. Azure gets `staticwebapp.config.json` so `/events/<id>` loads on refresh. H4 waits for the server.
+
+Today Orkesta opens straight into the last event, and everything about events (switch, new, duplicate, delete, shared with you) is squeezed into the dropdown next to the event name. OnePlan opens on a **dashboard** instead. The hub copies that and goes further where OnePlan is thin.
+
+### What OnePlan's dashboard has (from the signed-in teardown and their dashboard text)
+
+- **Header:** logo, a Calculators menu, the workspace switcher ("Personal workspace" or "N-person team"), profile avatar.
+- **Inspiration Hub:** a carousel of 5 sample plans (stadium concert, arena sports, festival, venue event, road event). They open as view-only links.
+- **Events block:** "Personal Events" or "Team's events", a search box ("Search for an event"), "Sorted by: Last updated", the author on each event, and a **Create New Event** button.
+- **Per-event menu:** Rename, Duplicate, Share event, Move to (personal → team, one-way), Delete event (type a word to confirm). Several events can be deleted at once.
+- **Empty state:** "Oh no, your dashboard is empty! Create an event…". The first-run dialog asks only for **event name** and **location**.
+- **In the editor:** "Return to dashboard".
+
+### The Orkesta hub
+
+**Layout (desktop):**
+
+| Area | Contents |
+|---|---|
+| Header | iNBest logo and Orkesta, search across events, account menu (and, once a server exists, the workspace switcher) |
+| Continue | A wide card for the event you last worked on: thumbnail, name, venue, date, "edited 2 h ago", **Open** |
+| Start something | **New event** (primary), **From a venue drawing** (PDF or image), **Open a project file** (.json) |
+| Templates | The 5 starter layouts as cards with a thumbnail and a one-line description (OnePlan's Inspiration Hub, but they open as editable copies) |
+| Your events | Grid of cards (or a list), search, sort (last edited, event date, name), filter chips: All · Upcoming · Past · Shared with me · Archived |
+| Shared with you | Team events not on this device yet, with your role (Admin/Staff) and **Open** |
+
+**Event card:**
+- a thumbnail drawn from the plan itself (tables, stage, zones as simple shapes), so there's no image to store;
+- name, venue, event date (with "in 12 days" or "past"), last edited;
+- badges: Shared, your role, levels, guests seated (e.g. 180/200);
+- **⋯ menu:** Open, Rename, Duplicate, Share link…, Version history…, Archive / Unarchive, Delete.
+- Delete asks you to type the event name, because an event holds the guest list (OnePlan does the same).
+- Select several cards to archive or delete them together.
+
+**New event dialog:** one step, replacing today's template picker:
+- event name, date, venue (place search, which also centres the satellite view), and venue size;
+- **start from:** Blank · one of the 5 templates · a venue drawing (PDF or image; reuses PDF import) · a project file.
+
+**In the editor:** the logo and an "All events" button go back to the hub. The dropdown next to the event name stays for quick switching but gets shorter: recent events plus "All events…".
+
+**Phones:**
+- the hub is the landing page: Continue, Your events, Shared with you, as a list;
+- **Open** goes to the read-only phone view;
+- creating events stays on desktop, like editing.
+
+**Addresses:**
+- `/` is the hub, `/events/<id>` opens an event; Back returns to the hub.
+- Share links (`#plan=…`) and invite links keep working.
+- Azure needs a `staticwebapp.config.json` that sends unknown paths to the app; the offline cache already does.
+
+### Data changes
+
+- **Event summary:** add `createdAt`, `lastOpenedAt`, `archived`, a counts snapshot (levels, objects, tables, seats, guests, seated) and a compact `thumb`. The thumb is a few hundred shapes reduced to small SVG path data, so cards render instantly without loading whole plans.
+- Older events get their thumbnail filled in the first time the hub sees them.
+- **No database migration:** summaries are plain objects in the existing `summaries` store.
+- **Templates** get the same thumbnails, generated from `TEMPLATES` at build time.
+
+### What waits for the server
+
+- workspaces (Personal / Team) and the switcher;
+- "Move to team";
+- the author on each card;
+- team events on every device;
+- seat counts.
+
+Until then, "Shared with you" uses the test backend as today.
+
+### Build order
+
+| # | Scope | Size |
+|---|---|---|
+| H1 | Routing (`/` and `/events/<id>`), hub page, Continue card, event grid with thumbnails, search and sort, card menu (open, rename, duplicate, delete with typed confirmation), Shared with you, "All events" in the editor, Azure fallback config | M |
+| H2 | New event dialog (name, date, venue search, size, start from blank/template/drawing/file), templates row with thumbnails, empty state and first-run | M |
+| H3 | Filters (upcoming, past, shared, archived), archive, multi-select, list view, phone hub, tests for summaries and thumbnails | M |
+| H4 (server) | Workspaces, move to team, authors, team events everywhere | with the server work |
+
+Decisions:
+- the app opens on the hub every time, with the last event one click away (Continue);
+- deleting needs the typed name;
+- archive hides an event from the main list without deleting it.

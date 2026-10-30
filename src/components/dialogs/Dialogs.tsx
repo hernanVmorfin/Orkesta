@@ -6,7 +6,7 @@ const RepeatDialog = lazy(() => import('./LayoutDialogs').then((m) => ({ default
 const SeatBlockDialog = lazy(() => import('./LayoutDialogs').then((m) => ({ default: m.SeatBlockDialog })))
 const ScheduleDialog = lazy(() => import('./OpsDialogs').then((m) => ({ default: m.ScheduleDialog })))
 const FilteredExportDialog = lazy(() => import('./OpsDialogs').then((m) => ({ default: m.FilteredExportDialog })))
-const TemplatesDialog = lazy(() => import('./LibraryDialogs').then((m) => ({ default: m.TemplatesDialog })))
+const NewEventDialog = lazy(() => import('./NewEventDialog').then((m) => ({ default: m.NewEventDialog })))
 const CustomItemDialog = lazy(() => import('./LibraryDialogs').then((m) => ({ default: m.CustomItemDialog })))
 const HistoryDialog = lazy(() => import('./HistoryDialog').then((m) => ({ default: m.HistoryDialog })))
 
@@ -14,6 +14,7 @@ const HistoryDialog = lazy(() => import('./HistoryDialog').then((m) => ({ defaul
 export function Dialogs() {
   const dialog = usePlanStore((s) => s.dialog)
   const set = usePlanStore((s) => s.set)
+  const start = usePlanStore((s) => s.newEventStart)
   const close = () => set({ dialog: null })
   const el = (() => {
     switch (dialog) {
@@ -21,7 +22,7 @@ export function Dialogs() {
       case 'seatBlock': return <SeatBlockDialog onClose={close} />
       case 'schedule': return <ScheduleDialog onClose={close} />
       case 'export': return <FilteredExportDialog onClose={close} />
-      case 'templates': return <TemplatesDialog onClose={close} />
+      case 'newEvent': return <NewEventDialog onClose={close} start={start} />
       case 'customItem': return <CustomItemDialog onClose={close} />
       case 'history': return <HistoryDialog onClose={close} />
       default: return null

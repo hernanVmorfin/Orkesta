@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Undo2, Redo2, ZoomIn, ZoomOut, Maximize, MousePointer2, Ruler, Grid3x3, Magnet, Image as ImageIcon,
+  LayoutGrid, Undo2, Redo2, ZoomIn, ZoomOut, Maximize, MousePointer2, Ruler, Grid3x3, Magnet, Image as ImageIcon,
   TriangleAlert, Tag, Share2, FileDown, Eye, Pencil, CloudOff, Satellite, SlidersHorizontal, Shapes, PanelRight, Check, Cloud,
   MessageSquare, MessagesSquare,
 } from 'lucide-react'
@@ -59,8 +59,15 @@ export function TopBar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-bg-2 bg-white px-3">
-      <img src="/brand/logo-inbest.png" alt="iNBest" className="h-6" />
-      <span className="hidden text-sm font-semibold tracking-tight text-ink-2 xl:block">Orkesta</span>
+      {s.linkViewOnly ? (
+        <img src="/brand/logo-inbest.png" alt="iNBest" className="h-6" />
+      ) : (
+        <button className="flex shrink-0 items-center gap-2 rounded-md px-1 py-1 hover:bg-bg" title="All events" aria-label="All events" onClick={() => void s.showHub()}>
+          <LayoutGrid size={16} className="text-muted" />
+          <img src="/brand/logo-inbest.png" alt="" className="h-6" />
+          <span className="hidden text-sm font-semibold tracking-tight text-ink-2 xl:block">Orkesta</span>
+        </button>
+      )}
       <div className="mx-2 hidden h-6 w-px bg-bg-2 lg:block" />
       <div className="min-w-0">
         <input value={s.plan.name} disabled={s.viewOnly}

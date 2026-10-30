@@ -1,39 +1,10 @@
 import { useState } from 'react'
 import { nanoid } from 'nanoid'
-import { FilePlus2, LayoutTemplate } from 'lucide-react'
 import { usePlanStore } from '../../store/usePlanStore'
 import { LAYERS } from '../../lib/catalog'
 import { ICONS } from '../../lib/icons'
-import { TEMPLATES } from '../../data/templates'
 import type { LayerId } from '../../types'
 import { Modal, NumField } from './Modal'
-
-/** New event: blank, or a starter layout to adapt. */
-export function TemplatesDialog({ onClose }: { onClose: () => void }) {
-  const s = usePlanStore()
-  const start = async (build?: () => import('../../types').Plan) => {
-    onClose()
-    if (build) await s.importPlan(build())
-    else await s.newEvent()
-  }
-  return (
-    <Modal title="New event" eyebrow="Start from" onClose={onClose}>
-      <div className="space-y-2">
-        <button className="flex w-full items-start gap-3 rounded-lg border border-bg-2 p-3 text-left hover:border-accent hover:bg-accent/5" onClick={() => start()}>
-          <FilePlus2 size={20} className="mt-0.5 shrink-0 text-accent-deep" />
-          <span><span className="block font-semibold">Blank plan</span><span className="text-xs text-muted">An empty 30 × 20 m venue</span></span>
-        </button>
-        {TEMPLATES.map((t) => (
-          <button key={t.id} className="flex w-full items-start gap-3 rounded-lg border border-bg-2 p-3 text-left hover:border-accent hover:bg-accent/5" onClick={() => start(t.build)}>
-            <LayoutTemplate size={20} className="mt-0.5 shrink-0 text-accent-deep" />
-            <span><span className="block font-semibold">{t.name}</span><span className="text-xs text-muted">{t.description}</span></span>
-          </button>
-        ))}
-      </div>
-      <p className="mt-3 text-[11px] text-muted">Templates open as a new event you can change freely. Set the venue size and location in the Venue tab.</p>
-    </Modal>
-  )
-}
 
 /** An object of any size and colour, saved with this event so the team sees it too. */
 export function CustomItemDialog({ onClose }: { onClose: () => void }) {

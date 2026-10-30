@@ -7,8 +7,7 @@ import type { Plan } from '../types'
 import { SatelliteSection } from './SatelliteSection'
 import { activeLevel, levelsOf, setVenue, venueOf } from '../lib/levels'
 import { toast } from '../lib/toast'
-
-const isPdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+import { isPdf, readImageFile } from '../lib/drawing'
 
 export function VenuePanel() {
   const s = usePlanStore()
@@ -27,17 +26,12 @@ export function VenuePanel() {
   const multiLevel = levelsOf(plan).length > 1
   const bm = venue.basemap
 
-  const onImage = (f: File) => {
-    const r = new FileReader()
-    r.onload = () => {
-      const img = new Image()
-      img.onload = () => {
-        upVenue({ basemap: { src: r.result as string, widthM: venue.widthM, aspect: img.width / img.height, x: 0, y: 0, opacity: 0.5 } })
-        s.set({ showBasemap: true })
-      }
-      img.src = r.result as string
-    }
-    r.readAsDataURL(f)
+  const onImage = async (f: File) => {
+    try {
+      const { src, aspect } = await readImageFile(f)
+      upVenue({ basemap: { src, widthM: venue.widthM, aspect, x: 0, y: 0, opacity: 0.5 } })
+      s.set({ showBasemap: true })
+    } catch { toast('Couldn’t read that image') }
   }
 
   const importPdfPage = async (doc: PDFDocumentProxy, page: number) => {
@@ -55,7 +49,7 @@ export function VenuePanel() {
   }
 
   const onFile = async (f: File) => {
-    if (!isPdf(f)) { onImage(f); return }
+    if (!isPdf(f)) { await onImage(f); return }
     setBusy(true)
     try {
       const { openPdf } = await import('../lib/pdfImport')
@@ -209,7 +203,7 @@ export function VenuePanel() {
           if (!Array.isArray(p?.elements) || !p.layers) { alert('Invalid project file'); return }
           await s.importPlan(p)
         }} />
-        <button className="btn w-full" onClick={() => s.set({ dialog: 'templates' })}>
+        <button className="btn w-full" onClick={() => s.set({ dialog: 'newEvent', newEventStart: 'blank' })}>
           <Plus size={15} />New event
         </button>
         <p className="text-[11px] text-muted">Events are saved in this browser. Switch between them from the menu next to the event name.</p>

@@ -1,28 +1,26 @@
-import { useEffect, useState } from 'react'
-import { TopBar } from './components/TopBar'
-import { Library } from './components/Library'
-import { FloorCanvas } from './components/FloorCanvas'
-import { RightPanel } from './components/RightPanel'
-import { MobileApp } from './components/mobile/MobileApp'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { MobileHub } from './components/mobile/MobileHub'
+import { Hub } from './components/hub/Hub'
 import { usePlanStore } from './store/usePlanStore'
-import { acceptInvite, initTeam, openMessages, takeInviteToken } from './store/team'
-import { UrgentBanner } from './components/team/UrgentBanner'
+import { acceptInvite, initTeam, takeInviteToken } from './store/team'
 import { requestFit } from './lib/canvas'
 import { toast as showToast } from './lib/toast'
 import { selectableIds } from './lib/levels'
 import { Dialogs } from './components/dialogs/Dialogs'
 import { applyUpdate } from './lib/pwa'
 import { PasswordGate } from './components/PasswordGate'
-import { MOBILE_QUERY, useIsMobile, useIsWide } from './lib/useMediaQuery'
+import { MOBILE_QUERY, useIsMobile } from './lib/useMediaQuery'
+
+// The hub opens first, so the editors load when an event does
+const Editor = lazy(() => import('./components/Editor'))
+const MobileApp = lazy(() => import('./components/mobile/MobileApp').then((m) => ({ default: m.MobileApp })))
+const loading = <div className="grid h-full place-items-center text-sm text-muted">Opening the event…</div>
 
 export default function App() {
-  const viewOnly = usePlanStore((s) => s.viewOnly)
+  const view = usePlanStore((s) => s.view)
   const hydrated = usePlanStore((s) => s.hydrated)
   const locked = usePlanStore((s) => !!s.lockedShare)
-  const showLibrary = usePlanStore((s) => s.showLibrary)
-  const showPanel = usePlanStore((s) => s.showPanel)
   const isMobile = useIsMobile()
-  const wide = useIsWide()
   const [toast, setToast] = useState<string | null>(null)
   const [updateReady, setUpdateReady] = useState(false)
 
@@ -32,7 +30,7 @@ export default function App() {
     void (async () => {
       await usePlanStore.getState().hydrate()
       await initTeam()
-      if (invite) await acceptInvite(invite)
+      if (invite && await acceptInvite(invite)) usePlanStore.setState({ view: 'editor' })
     })()
   }, [])
 
@@ -63,6 +61,10 @@ export default function App() {
       const mod = e.metaKey || e.ctrlKey
       if (e.key === 'Escape') {
         if (s.dialog) { s.set({ dialog: null }); return }
+      }
+      // The hub has no plan on screen, so none of the editor's shortcuts apply
+      if (s.view === 'hub') return
+      if (e.key === 'Escape') {
         s.set({ placing: null, selection: [], measure: null, tool: 'select', drawing: null, commentDraft: null, activeComment: null })
       }
       if (!mod && e.key === 'f') requestFit()
@@ -119,21 +121,8 @@ export default function App() {
 
   return (
     <>
-      {isMobile ? <MobileApp /> : (
-        <div className="flex h-full flex-col">
-          <TopBar />
-          {/* Below 1280 px the side panels slide over the plan instead of squeezing it */}
-          <div className="relative flex min-h-0 flex-1">
-            {!viewOnly && (wide || showLibrary) && (
-              <div className={wide ? 'contents' : 'absolute inset-y-0 left-0 z-30 flex shadow-xl'}><Library /></div>
-            )}
-            <main className="min-w-0 flex-1"><FloorCanvas /></main>
-            {(wide || showPanel) && (
-              <div className={wide ? 'contents' : 'absolute inset-y-0 right-0 z-30 flex shadow-xl'}><RightPanel /></div>
-            )}
-            <UrgentBanner onView={openMessages} className="absolute left-1/2 top-3 z-40 w-[min(520px,calc(100%-32px))] -translate-x-1/2" />
-          </div>
-        </div>
+      {view === 'hub' ? (isMobile ? <MobileHub /> : <Hub />) : (
+        <Suspense fallback={loading}>{isMobile ? <MobileApp /> : <Editor />}</Suspense>
       )}
       <Dialogs />
       {updateReady && (
