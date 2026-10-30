@@ -8,6 +8,7 @@ import { usePlanStore } from '../store/usePlanStore'
 import { useIsWide } from '../lib/useMediaQuery'
 import { canvasRef, requestFit } from '../lib/canvas'
 import { download, guestsToCsv } from '../lib/csv'
+import { inventoryCsv } from '../lib/inventoryCsv'
 import { ShareDialog } from './ShareDialog'
 import { EventsMenu } from './EventsMenu'
 import { AccountMenu } from './team/AccountMenu'
@@ -138,13 +139,16 @@ export function TopBar() {
           </button>
           {menu && (
             <div className="absolute right-0 top-10 z-30 w-60 rounded-lg border border-bg-2 bg-white p-1 text-sm shadow-lg">
-              <MenuItem onClick={() => run(async () => (await exporter()).exportPdf(canvasRef.current!, s.plan))}>PDF plan · A3 300 dpi</MenuItem>
-              <MenuItem onClick={() => run(async () => (await exporter()).exportPdf(canvasRef.current!, s.plan, { grid: true, clearance: true }))}>PDF with grid + aisle checks</MenuItem>
+              <MenuItem onClick={() => run(async () => (await exporter()).exportPdf(canvasRef.current!, s.plan, { grid: false, clearance: false, levelId: s.levelId }))}>PDF plan · A3 300 dpi</MenuItem>
+              <MenuItem onClick={() => run(async () => (await exporter()).exportPdf(canvasRef.current!, s.plan, { grid: true, clearance: true, levelId: s.levelId }))}>PDF with grid + aisle checks</MenuItem>
               <MenuItem onClick={() => run(async () => {
-                const { dataUrl } = await (await exporter()).renderPlanPng(canvasRef.current!, s.plan, 6000, { grid: false, clearance: false })
+                const { dataUrl } = await (await exporter()).renderPlanPng(canvasRef.current!, s.plan, 6000, { grid: false, clearance: false, levelId: s.levelId })
                 const a = document.createElement('a'); a.href = dataUrl; a.download = 'floorplan.png'; a.click()
               })}>PNG image · 6000 px</MenuItem>
+              <MenuItem onClick={() => { setMenu(false); s.set({ dialog: 'export' }) }}>Vendor / layer export…</MenuItem>
+              <div className="my-1 h-px bg-bg-2" />
               <MenuItem onClick={() => run(() => download('guests-seating.csv', guestsToCsv(s.plan), 'text/csv'))}>Seating list (.csv)</MenuItem>
+              <MenuItem onClick={() => run(() => download('inventory.csv', inventoryCsv(s.plan, 'objects'), 'text/csv'))}>Inventory (.csv)</MenuItem>
               <MenuItem onClick={() => run(() => download('floorplan.json', JSON.stringify(s.plan, null, 2), 'application/json'))}>Project file (.json)</MenuItem>
             </div>
           )}

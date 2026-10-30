@@ -41,7 +41,7 @@ export function MobileDetails() {
   const downloadPdf = async () => {
     if (!canvasRef.current) return
     setBusy(true)
-    try { await (await import('../../lib/exportPlan')).exportPdf(canvasRef.current, plan) } catch { toast('Couldn’t create the PDF. Try again.') }
+    try { await (await import('../../lib/exportPlan')).exportPdf(canvasRef.current, plan, { grid: false, clearance: false, levelId: usePlanStore.getState().levelId }) } catch { toast('Couldn’t create the PDF. Try again.') }
     setBusy(false)
   }
 

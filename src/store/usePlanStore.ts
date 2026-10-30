@@ -13,7 +13,7 @@ import type { Account, Invite, Member, Message, Role, SharedEventInfo, StaffGrou
 
 /** 'geo' drags the satellite under the plan to line it up with the venue; 'comment' drops comment pins. */
 export type Tool = 'select' | 'measure' | 'geo' | 'comment'
-export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue' | 'team'
+export type RightTab = 'inspect' | 'tables' | 'layers' | 'venue' | 'ops' | 'team'
 export type SaveState = 'saved' | 'saving' | 'error'
 /** Shared events only: whether this device's edits have reached the server. */
 export type SyncState = 'idle' | 'syncing' | 'synced' | 'error'
@@ -52,7 +52,7 @@ interface State {
   /** Level being shown; null = the first */
   levelId: string | null
   /** Modal dialogs opened from menus */
-  dialog: 'repeat' | 'seatBlock' | 'templates' | 'schedule' | 'history' | 'customItem' | null
+  dialog: 'repeat' | 'seatBlock' | 'templates' | 'schedule' | 'history' | 'customItem' | 'export' | null
   showComments: boolean
   showResolved: boolean
   /** Open comment thread, or a new comment being written at a point */

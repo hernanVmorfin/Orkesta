@@ -48,6 +48,15 @@ export const LIBRARY_GROUPS: { id: string; name: string; items: CatalogItem[] }[
     ],
   },
   {
+    id: 'power', name: 'Power',
+    items: [
+      { kind: 'generator', name: 'Generator', layer: 'service', shape: 'rect', w: 2.6, h: 1.1, color: '#d97706', calc: 'supply', calcDefaults: { supplyKw: 60 } },
+      { kind: 'mains', name: 'Mains power point', layer: 'service', shape: 'icon', w: 0.8, h: 0.8, color: '#d97706', icon: 'PlugZap', calc: 'supply', calcDefaults: { supplyKw: 32 } },
+      { kind: 'distro', name: 'Distribution board', layer: 'service', shape: 'rect', w: 0.8, h: 0.6, color: '#f59e0b' },
+      { kind: 'light-tower', name: 'Lighting tower', layer: 'service', shape: 'icon', w: 1.2, h: 1.2, color: '#ca8a04', icon: 'Lightbulb' },
+    ],
+  },
+  {
     id: 'lines', name: 'Lines & areas',
     items: [
       { kind: 'crowd-barrier', name: 'Crowd control barrier', layer: 'security', shape: 'line', geometry: 'polyline', w: 0, h: 0, color: '#1d4ed8',

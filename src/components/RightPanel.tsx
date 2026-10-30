@@ -4,6 +4,7 @@ import { Inspector } from './Inspector'
 import { TablesPanel } from './TablesPanel'
 import { LayersPanel } from './LayersPanel'
 import { VenuePanel } from './VenuePanel'
+import { OpsPanel } from './OpsPanel'
 import { TeamPanel } from './team/TeamPanel'
 
 const TABS: { id: RightTab; label: string }[] = [
@@ -11,6 +12,7 @@ const TABS: { id: RightTab; label: string }[] = [
   { id: 'inspect', label: 'Inspect' },
   { id: 'layers', label: 'Layers' },
   { id: 'venue', label: 'Venue' },
+  { id: 'ops', label: 'Ops' },
   { id: 'team', label: 'Team' },
 ]
 
@@ -25,7 +27,7 @@ export function RightPanel() {
       <nav className="flex border-b border-bg-2 px-2">
         {TABS.filter((t) => t.id !== 'team' || !linkViewOnly).map((t) => (
           <button key={t.id} onClick={() => set({ rightTab: t.id })}
-            className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-3 text-xs font-medium ${tab === t.id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
+            className={`-mb-px flex items-center gap-1 border-b-2 px-2.5 py-3 text-xs font-medium ${tab === t.id ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'}`}>
             {t.label}
             {t.id === 'team' && unread > 0 && <span className="rounded-full bg-red-600 px-1.5 text-[10px] leading-4 text-white" aria-label={`${unread} unread`}>{unread}</span>}
           </button>
@@ -36,6 +38,7 @@ export function RightPanel() {
         {tab === 'inspect' && <Inspector />}
         {tab === 'layers' && <LayersPanel />}
         {tab === 'venue' && <VenuePanel />}
+        {tab === 'ops' && <OpsPanel />}
         {tab === 'team' && !linkViewOnly && <TeamPanel onShowPin={(pin) => { showPin(pin) }} />}
       </div>
     </aside>
