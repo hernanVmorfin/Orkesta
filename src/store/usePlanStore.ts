@@ -7,6 +7,7 @@ import { readShared } from '../lib/share'
 import * as db from '../lib/db'
 import type { EventSummary } from '../lib/db'
 import { autoSeat, type SeatingOptions, type SeatingSummary } from '../lib/seating'
+import { normalize, selfIntersects } from '../lib/shapes'
 import type { Account, Invite, Member, Message, Role, SharedEventInfo, StaffGroup } from '../lib/backend'
 
 /** 'geo' drags the satellite under the plan to line it up with the venue. */
@@ -45,6 +46,8 @@ interface State {
   /** Nothing can be edited: view-only links, and shared events unless you're one of the event's admins. */
   viewOnly: boolean
   measure: { a: Pt; b: Pt } | null
+  /** A line or area being drawn (plan meters) */
+  drawing: { kind: string; points: Pt[] } | null
   rightTab: RightTab
   highlightTable: string | null
   /** False until the current event has been read from IndexedDB. */
@@ -83,6 +86,14 @@ interface State {
   redo: () => void
 
   addElement: (kind: string, at: Pt) => string
+  /** Adds a point to the line or area being drawn (starts one if needed). */
+  drawPoint: (kind: string, at: Pt) => void
+  /** Removes the last drawn point; cancels when none are left. */
+  undoDrawPoint: () => void
+  /** Turns the drawing into an element. Returns an error message when the shape is invalid. */
+  finishDrawing: () => string | null
+  /** Moves, inserts or removes a vertex of a drawn shape (local coordinates). */
+  editPoints: (id: string, fn: (pts: Pt[]) => Pt[], record?: boolean) => void
   updateElement: (id: string, patch: Partial<PlanElement>, record?: boolean) => void
   updateMany: (fn: (e: PlanElement) => PlanElement, ids: string[], record?: boolean) => void
   deleteSelected: () => void
@@ -119,7 +130,7 @@ async function migrateLegacy() {
   try { localStorage.removeItem(LEGACY_KEY) } catch { /* ignore */ }
 }
 
-const clearHistory = { past: [], future: [], selection: [], highlightTable: null, measure: null }
+const clearHistory = { past: [], future: [], selection: [], highlightTable: null, measure: null, drawing: null }
 let hydrating: Promise<void> | undefined
 
 export const seatsUsed = (plan: Plan, tableId: string) => plan.guests.filter((g) => g.tableId === tableId).length
@@ -144,6 +155,7 @@ export const usePlanStore = create<State>((set, get) => ({
   linkViewOnly: init.viewOnly,
   viewOnly: init.viewOnly,
   measure: null,
+  drawing: null,
   rightTab: 'tables',
   highlightTable: null,
   hydrated: init.viewOnly,
@@ -252,6 +264,33 @@ export const usePlanStore = create<State>((set, get) => ({
     set({ selection: [id] })
     return id
   },
+  drawPoint: (kind, at) => set((s) => ({
+    drawing: s.drawing?.kind === kind ? { kind, points: [...s.drawing.points, at] } : { kind, points: [at] },
+  })),
+  undoDrawPoint: () => set((s) => {
+    const pts = s.drawing?.points.slice(0, -1) ?? []
+    return { drawing: pts.length && s.drawing ? { ...s.drawing, points: pts } : null }
+  }),
+  finishDrawing: () => {
+    const { drawing, zoom } = get()
+    if (!drawing) return null
+    // A double-click lands extra points on top of the last one
+    const pts = drawing.points.filter((p, i, a) => i === 0 || Math.hypot(p.x - a[i - 1].x, p.y - a[i - 1].y) * zoom > 4)
+    const c = CATALOG[drawing.kind]
+    const area = c?.geometry === 'polygon'
+    if (area && pts.length < 3) return 'An area needs at least 3 points'
+    if (!area && pts.length < 2) return 'A line needs at least 2 points'
+    if (area && selfIntersects(pts)) return 'The area crosses itself. Move a point so its edges don’t cross.'
+    const id = nanoid(8)
+    get().mutate((p) => ({
+      ...p,
+      elements: [...p.elements, { id, kind: drawing.kind, label: c.name, rotation: 0, layer: c.layer, ...normalize(pts) }],
+    }))
+    set({ drawing: null, placing: null, selection: [id] })
+    return null
+  },
+  editPoints: (id, fn, record = true) =>
+    get().mutate((p) => ({ ...p, elements: p.elements.map((e) => (e.id === id && e.points ? { ...e, points: fn(e.points) } : e)) }), record),
   updateElement: (id, patch, record = true) =>
     get().mutate((p) => ({ ...p, elements: p.elements.map((e) => (e.id === id ? { ...e, ...patch } : e)) }), record),
   updateMany: (fn, ids, record = true) => {
@@ -352,5 +391,5 @@ usePlanStore.subscribe((s, prev) => {
 // Shared events can only be edited by their admins
 usePlanStore.subscribe((s) => {
   const viewOnly = s.linkViewOnly || (!!s.plan.shared && s.role !== 'admin')
-  if (viewOnly !== s.viewOnly) usePlanStore.setState({ viewOnly, ...(viewOnly ? { placing: null, tool: 'select' as const, measure: null } : {}) })
+  if (viewOnly !== s.viewOnly) usePlanStore.setState({ viewOnly, ...(viewOnly ? { placing: null, tool: 'select' as const, measure: null, drawing: null } : {}) })
 })

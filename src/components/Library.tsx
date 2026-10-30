@@ -7,6 +7,26 @@ import { usePlanStore } from '../store/usePlanStore'
 import { useIsWide } from '../lib/useMediaQuery'
 
 function Thumb({ item }: { item: CatalogItem }) {
+  if (item.geometry === 'polyline') {
+    const st = item.style ?? {}
+    return (
+      <svg width={34} height={20} viewBox="0 0 34 20">
+        <polyline points="2,16 14,6 32,12" fill="none" stroke={st.stroke ?? item.color} strokeLinecap="round" strokeLinejoin="round"
+          strokeWidth={Math.min(6, Math.max(2, (st.strokeWidth ?? 0.1) * 12))} strokeDasharray={st.strokeStyle === 'dashed' ? '4 3' : undefined} />
+        {st.pattern === 'ticks' && [8, 20, 27].map((x) => <line key={x} x1={x} x2={x} y1={x < 14 ? 7 : 6} y2={x < 14 ? 15 : 14} stroke={st.stroke} strokeWidth={1.5} />)}
+        {st.pattern === 'dots' && [[2, 16], [14, 6], [32, 12]].map(([x, y]) => <circle key={x} cx={x} cy={y} r={2.5} fill={st.stroke} />)}
+      </svg>
+    )
+  }
+  if (item.geometry === 'polygon') {
+    const st = item.style ?? {}
+    return (
+      <svg width={34} height={24} viewBox="0 0 34 24">
+        <polygon points="3,20 8,4 28,3 31,18" fill={st.fill ?? item.color} fillOpacity={Math.max(0.25, st.fillOpacity ?? 0.1)} stroke={st.stroke ?? item.color}
+          strokeWidth={1.5} strokeDasharray={st.strokeStyle === 'dashed' ? '3 2' : undefined} strokeLinejoin="round" />
+      </svg>
+    )
+  }
   const Icon = item.icon ? ICONS[item.icon] : undefined
   if (Icon) return <span className="grid h-8 w-8 place-items-center rounded-full" style={{ background: item.color }}><Icon size={16} color="#fff" /></span>
   if (item.shape === 'roundTable' || item.shape === 'cocktail' || item.shape === 'plant')
@@ -34,7 +54,7 @@ export function Library() {
       </div>
       <div className="panel-scroll flex-1 overflow-y-auto px-3 pb-4">
         {LIBRARY_GROUPS.map((g) => {
-          const items = g.items.filter((i) => i.name.toLowerCase().includes(q.toLowerCase()))
+          const items = g.items.filter((i) => !i.hidden && i.name.toLowerCase().includes(q.toLowerCase()))
           if (!items.length) return null
           const isClosed = closed[g.id] && !q
           return (
@@ -51,7 +71,7 @@ export function Library() {
                       onDragStart={(e) => e.dataTransfer.setData('application/x-kind', i.kind)}
                       // As a drawer (below 1280 px) the library gets out of the way so the plan can be tapped
                       onClick={() => set({ placing: placing === i.kind ? null : i.kind, tool: 'select', ...(wide ? {} : { showLibrary: false }) })}
-                      title={`${i.name} · ${i.w} × ${i.h} m`}
+                      title={i.geometry ? `${i.name} · click, then draw on the plan` : `${i.name} · ${i.w} × ${i.h} m`}
                       className={`flex h-[68px] flex-col items-center justify-center gap-1 rounded-lg border text-center text-[10px] leading-tight transition ${placing === i.kind ? 'border-accent bg-accent/10' : 'border-bg-2 hover:border-accent/50 hover:bg-bg'}`}>
                       <span className="grid h-8 place-items-center"><Thumb item={i} /></span>
                       <span className="line-clamp-2 px-0.5 text-ink-2">{i.name}</span>

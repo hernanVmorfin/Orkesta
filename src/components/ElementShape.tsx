@@ -1,7 +1,9 @@
 import { memo } from 'react'
-import type { PlanElement, TableTag } from '../types'
+import type { ElementStyle, PlanElement, Pt, TableTag } from '../types'
 import { CATALOG } from '../lib/catalog'
 import { ICONS } from '../lib/icons'
+import { calcInputs, planSummary } from '../lib/calcs'
+import { centroid, marksAlong, midpointAlong, pathLength } from '../lib/shapes'
 
 interface Props {
   e: PlanElement
@@ -43,10 +45,116 @@ function Chairs({ e }: { e: PlanElement }) {
   )
 }
 
+const dashFor = (st: ElementStyle, w: number) =>
+  st.strokeStyle === 'dashed' ? `${w * 4} ${w * 3}` : st.strokeStyle === 'dotted' ? `0 ${w * 2.2}` : undefined
+
+/** Upright text angle for a line running at `a` radians. */
+const readable = (a: number) => {
+  const d = (a * 180) / Math.PI
+  return d > 90 || d < -90 ? d + 180 : d
+}
+
+/** Pattern marks along a drawn line: section ticks, flow arrows, chevrons, or posts/cones. */
+function Marks({ pts, st, e }: { pts: Pt[]; st: ElementStyle; e: PlanElement }) {
+  const sw = st.strokeWidth ?? 0.1
+  const stroke = st.stroke ?? '#5b6576'
+  const v = calcInputs(e)
+  switch (st.pattern) {
+    case 'ticks': {
+      const seg = v.segmentM ?? 2
+      const half = Math.max(sw * 2.2, 0.2)
+      return <g>{marksAlong(pts, seg, seg).map((m, i) => (
+        <line key={i} x1={0} y1={-half} x2={0} y2={half} stroke={stroke} strokeWidth={sw * 0.8}
+          transform={`translate(${m.p.x} ${m.p.y}) rotate(${(m.angle * 180) / Math.PI})`} />
+      ))}</g>
+    }
+    case 'dots': {
+      const r = Math.max(0.12, sw * 2.5)
+      return <g>{marksAlong(pts, v.spacingM ?? 1, 0).map((m, i) => (
+        <circle key={i} cx={m.p.x} cy={m.p.y} r={r} fill={stroke} stroke="#ffffff" strokeWidth={r * 0.3} />
+      ))}</g>
+    }
+    case 'arrows':
+    case 'chevrons': {
+      const s = Math.max(sw * 0.9, 0.15)
+      const every = Math.max(sw * 10, 2)
+      return <g>{marksAlong(pts, every).map((m, i) => (
+        <path key={i} transform={`translate(${m.p.x} ${m.p.y}) rotate(${(m.angle * 180) / Math.PI})`}
+          d={st.pattern === 'arrows' ? `M ${s} 0 L ${-s * 0.7} ${-s * 0.8} L ${-s * 0.7} ${s * 0.8} Z` : `M ${-s * 0.5} ${-s} L ${s * 0.5} 0 L ${-s * 0.5} ${s}`}
+          fill={st.pattern === 'arrows' ? '#ffffff' : 'none'} stroke="#ffffff" strokeWidth={st.pattern === 'arrows' ? 0 : s * 0.35}
+          strokeLinecap="round" strokeLinejoin="round" />
+      ))}</g>
+    }
+    default:
+      return null
+  }
+}
+
+/** A drawn line or area. Points are already in the element's local frame. */
+function DrawnShape({ e, showLabels }: { e: PlanElement; showLabels: boolean }) {
+  const c = CATALOG[e.kind]
+  const st: ElementStyle = { ...c?.style, ...e.style }
+  const pts = e.points!
+  const closed = c?.geometry === 'polygon'
+  const sw = st.strokeWidth ?? 0.1
+  const stroke = st.stroke ?? e.color ?? c?.color ?? '#5b6576'
+  const d = pts.map((p) => `${p.x},${p.y}`).join(' ')
+  const dash = dashFor(st, sw)
+  const label = showLabels && e.label
+
+  if (closed) {
+    const ct = centroid(pts)
+    const summary = planSummary(e)
+    const fs = Math.min(0.6, Math.max(0.3, Math.sqrt(Math.max(1, e.w * e.h)) / 14))
+    return (
+      <>
+        <polygon points={d} fill={st.fill ?? stroke} fillOpacity={st.fillOpacity ?? 0.1} stroke={stroke} strokeWidth={sw}
+          strokeDasharray={dash} strokeLinejoin="round" strokeLinecap="round" />
+        {label && (
+          <g transform={`rotate(${-e.rotation} ${ct.x} ${ct.y})`} pointerEvents="none">
+            <text x={ct.x} y={ct.y - (summary ? fs * 0.4 : 0)} textAnchor="middle" dominantBaseline="middle" fontFamily={FONT}
+              fontSize={fs} fontWeight={600} fill="#0a1729" stroke="#ffffff" strokeWidth={fs * 0.18} paintOrder="stroke">{e.label}</text>
+            {summary && (
+              <text x={ct.x} y={ct.y + fs * 0.8} textAnchor="middle" dominantBaseline="middle" fontFamily={FONT}
+                fontSize={fs * 0.8} fill="#1c2638" stroke="#ffffff" strokeWidth={fs * 0.15} paintOrder="stroke">{summary}</text>
+            )}
+          </g>
+        )}
+      </>
+    )
+  }
+
+  const mid = midpointAlong(pts)
+  const fs = Math.min(0.5, Math.max(0.28, sw * 1.6))
+  return (
+    <>
+      {/* a wide invisible stroke makes thin lines easy to click */}
+      <polyline points={d} fill="none" stroke="transparent" strokeWidth={Math.max(sw, 0.8)} strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={d} fill="none" stroke={stroke} strokeOpacity={st.pattern === 'arrows' || st.pattern === 'chevrons' ? 0.85 : 1}
+        strokeWidth={sw} strokeDasharray={dash} strokeLinecap="round" strokeLinejoin="round" />
+      <Marks pts={pts} st={st} e={e} />
+      {label && pathLength(pts) > 1 && (
+        <text transform={`translate(${mid.p.x} ${mid.p.y}) rotate(${readable(mid.angle)})`} y={-(sw / 2 + fs * 0.5)}
+          textAnchor="middle" fontFamily={FONT} fontSize={fs} fill="#1c2638" stroke="#ffffff" strokeWidth={fs * 0.18}
+          paintOrder="stroke" pointerEvents="none">{e.label}</text>
+      )}
+    </>
+  )
+}
+
 export const ElementShape = memo(function ElementShape({ e, tag, used, showLabels, highlight }: Props) {
   const c = CATALOG[e.kind]
   const shape = c?.shape ?? 'rect'
   const color = e.color ?? c?.color ?? '#5b6576'
+
+  if (e.points?.length) {
+    return (
+      <g transform={`translate(${e.x} ${e.y}) rotate(${e.rotation})`} data-id={e.id} style={{ cursor: e.locked ? 'default' : 'move' }}>
+        {highlight && <circle r={Math.max(e.w, e.h) / 2 + 1} fill="#1ea7e8" fillOpacity={0.18} className="no-export" />}
+        <DrawnShape e={e} showLabels={showLabels} />
+      </g>
+    )
+  }
 
   let body: React.ReactNode
   switch (shape) {
@@ -107,8 +215,8 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
     case 'zone':
       body = (
         <>
-          <rect x={-e.w / 2} y={-e.h / 2} width={e.w} height={e.h} fill={color} fillOpacity={0.05}
-            stroke={color} strokeWidth={0.1} strokeDasharray="0.4 0.25" />
+          <rect x={-e.w / 2} y={-e.h / 2} width={e.w} height={e.h} fill={e.style?.fill ?? color} fillOpacity={e.style?.fillOpacity ?? 0.05}
+            stroke={color} strokeWidth={0.1} strokeDasharray={e.style?.strokeStyle === 'solid' ? undefined : '0.4 0.25'} />
           <text x={-e.w / 2 + 0.3} y={-e.h / 2 + 0.6} fontFamily={FONT} fontSize={0.45} fill={color}>{e.label}</text>
         </>
       )
@@ -123,7 +231,7 @@ export const ElementShape = memo(function ElementShape({ e, tag, used, showLabel
       body = (
         <>
           <rect x={-e.w / 2} y={-e.h / 2} width={e.w} height={e.h} rx={Math.min(e.w, e.h) * 0.08}
-            fill={color} fillOpacity={shape === 'line' ? 1 : 0.9} />
+            fill={color} fillOpacity={e.style?.fillOpacity ?? (shape === 'line' ? 1 : 0.9)} />
           {showLabels && shape !== 'line' && Math.min(e.w, e.h) > 0.35 && (
             <text textAnchor="middle" dominantBaseline="middle" fontFamily={FONT} fontSize={fs}
               fill={dark ? '#eaf1fa' : '#0a1729'} transform={vertical ? 'rotate(-90)' : undefined}>{e.label}</text>

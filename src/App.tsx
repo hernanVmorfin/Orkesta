@@ -8,6 +8,7 @@ import { usePlanStore } from './store/usePlanStore'
 import { acceptInvite, initTeam, openMessages, takeInviteToken } from './store/team'
 import { UrgentBanner } from './components/team/UrgentBanner'
 import { requestFit } from './lib/canvas'
+import { toast as showToast } from './lib/toast'
 import { MOBILE_QUERY, useIsMobile, useIsWide } from './lib/useMediaQuery'
 
 export default function App() {
@@ -52,10 +53,15 @@ export default function App() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       const s = usePlanStore.getState()
       const mod = e.metaKey || e.ctrlKey
-      if (e.key === 'Escape') s.set({ placing: null, selection: [], measure: null, tool: 'select' })
+      if (e.key === 'Escape') s.set({ placing: null, selection: [], measure: null, tool: 'select', drawing: null })
       if (!mod && e.key === 'f') requestFit()
       // Phones are read-only, even with a hardware keyboard attached
       if (s.viewOnly || window.matchMedia(MOBILE_QUERY).matches) return
+      if (s.drawing) {
+        if (e.key === 'Enter') { e.preventDefault(); const err = s.finishDrawing(); if (err) showToast(err) }
+        else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); s.undoDrawPoint() }
+        return
+      }
       if (mod) {
         const k = e.key.toLowerCase()
         if (k === 'z') { e.preventDefault(); if (e.shiftKey) s.redo(); else s.undo() }

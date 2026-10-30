@@ -1,5 +1,6 @@
 import type { PlanElement, Pt } from '../types'
 import { CATALOG } from './catalog'
+import { nearestOnShape } from './shapes'
 
 export const GRID = 0.25
 export const snap = (v: number, step = GRID) => Math.round(v / step) * step
@@ -30,6 +31,8 @@ export interface ClearanceIssue { a: PlanElement; b: PlanElement; gap: number; p
 
 const OBSTACLE_SHAPES = new Set(['rect', 'line'])
 const IGNORE = new Set(['chair', 'banner', 'speaker'])
+/** Drawn lines that block people: walls, barriers and fences (not routes or queue lines). */
+const isBlockingLine = (e: PlanElement) => e.kind === 'wall-line' || CATALOG[e.kind]?.calc === 'segments'
 
 /** Aisle check: table-to-table and table-to-obstacle gaps below `min` meters. */
 export function clearanceIssues(elements: PlanElement[], min: number): ClearanceIssue[] {
@@ -37,7 +40,7 @@ export function clearanceIssues(elements: PlanElement[], min: number): Clearance
     const s = CATALOG[e.kind]?.shape
     return s === 'roundTable' || s === 'rectTable'
   })
-  const obstacles = elements.filter((e) => OBSTACLE_SHAPES.has(CATALOG[e.kind]?.shape) && !IGNORE.has(e.kind))
+  const obstacles = elements.filter((e) => (e.points?.length ? isBlockingLine(e) : OBSTACLE_SHAPES.has(CATALOG[e.kind]?.shape) && !IGNORE.has(e.kind)))
   const out: ClearanceIssue[] = []
   for (let i = 0; i < tables.length; i++) {
     const a = tables[i]
@@ -52,6 +55,15 @@ export function clearanceIssues(elements: PlanElement[], min: number): Clearance
       }
     }
     for (const o of obstacles) {
+      if (o.points?.length) {
+        const { q, d } = nearestOnShape(a, o, false)
+        const gap = d - ra
+        if (gap < min) {
+          const ux = (q.x - a.x) / (d || 1), uy = (q.y - a.y) / (d || 1)
+          out.push({ a, b: o, gap, pa: { x: a.x + ux * ra, y: a.y + uy * ra }, pb: q })
+        }
+        continue
+      }
       const gap = distToRect(a, o) - ra
       if (gap < min) out.push({ a, b: o, gap, pa: { x: a.x, y: a.y }, pb: { x: o.x, y: o.y } })
     }

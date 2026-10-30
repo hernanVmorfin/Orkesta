@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigation } from 'lucide-react'
 import { usePlanStore } from '../store/usePlanStore'
 import { ElementShape } from './ElementShape'
-import { LAYERS, CATALOG, isTableKind } from '../lib/catalog'
+import { LAYERS, CATALOG, isTableKind, isDrawnKind } from '../lib/catalog'
 import { clearanceIssues, dist, distToRect, snap } from '../lib/geometry'
+import { distToShape, fmtArea, fmtLen, pathLength, polygonArea, renormalize, toLocal, toPlan } from '../lib/shapes'
 import { canvasRef, type FocusRequest } from '../lib/canvas'
+import { toast } from '../lib/toast'
 import { SATELLITE_ATTRIBUTION, planToLatLng, tileZoom, tilesFor } from '../lib/geo'
-import type { GeoAnchor, Pt } from '../types'
+import type { GeoAnchor, PlanElement, Pt } from '../types'
 
 type Drag =
   | { t: 'move'; start: Pt; orig: Map<string, Pt>; primary: string; moved: boolean }
@@ -15,6 +17,7 @@ type Drag =
   | { t: 'measure'; a: Pt }
   | { t: 'marquee'; a: Pt; additive: boolean }
   | { t: 'geo'; start: Pt; geo0: GeoAnchor; moved: boolean }
+  | { t: 'node'; id: string; index: number; moved: boolean }
 
 const LAYER_ORDER = Object.fromEntries(LAYERS.map((l, i) => [l.id, i]))
 
@@ -115,8 +118,8 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
 
   const visible = useMemo(
     () => plan.elements
-      .filter((e) => plan.layers[e.layer]?.visible !== false)
-      .sort((a, b) => (LAYER_ORDER[a.layer] ?? 0) - (LAYER_ORDER[b.layer] ?? 0)),
+      .filter((e) => plan.layers[e.layer]?.visible !== false && !e.hidden)
+      .sort((a, b) => (LAYER_ORDER[a.layer] ?? 0) - (LAYER_ORDER[b.layer] ?? 0) || (a.z ?? 0) - (b.z ?? 0)),
     [plan.elements, plan.layers],
   )
   const tagById = useMemo(() => new Map(plan.tags.map((t) => [t.id, t])), [plan.tags])
@@ -142,10 +145,16 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
     let best: string | null = null
     let bestD = 24 / zoom
     for (const e of visible) {
-      const d = distToRect(w, e)
+      const d = e.points?.length ? distToShape(w, e, CATALOG[e.kind]?.geometry === 'polygon') : distToRect(w, e)
       if (d < bestD) { bestD = d; best = e.id }
     }
     return best
+  }
+
+  const snapPt = (w: Pt) => (s.snapOn ? { x: snap(w.x), y: snap(w.y) } : w)
+  const finishDrawing = () => {
+    const err = s.finishDrawing()
+    if (err) toast(err)
   }
 
   const pinchCenter = () => {
@@ -180,6 +189,37 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       drag.current = { t: 'pan', sx: ev.clientX, sy: ev.clientY, pan }
       return
     }
+    // Drawing a line or area: left click adds a point, right click takes the last one back
+    if (s.placing && isDrawnKind(s.placing) && !readOnly) {
+      if (ev.button === 2) s.undoDrawPoint()
+      else if (ev.button === 0) s.drawPoint(s.placing, snapPt(w))
+      return
+    }
+    // Points of the selected line or area
+    const handle = target.closest('[data-handle]')
+    const kindOfHandle = handle?.getAttribute('data-handle')
+    if ((kindOfHandle === 'node' || kindOfHandle === 'mid') && selection.length === 1 && !readOnly) {
+      const id = selection[0]
+      const index = Number(handle!.getAttribute('data-index'))
+      const e = plan.elements.find((x) => x.id === id)
+      if (!e?.points) return
+      if (kindOfHandle === 'node' && ev.button === 2) {
+        const min = CATALOG[e.kind]?.geometry === 'polygon' ? 3 : 2
+        if (e.points.length <= min) { toast(`Needs at least ${min} points`); return }
+        s.updateElement(id, renormalize({ ...e, points: e.points.filter((_, i) => i !== index) }))
+        return
+      }
+      if (ev.button !== 0) return
+      if (kindOfHandle === 'mid') {
+        // Dragging a midpoint adds a point there
+        s.editPoints(id, (pts) => [...pts.slice(0, index + 1), toLocal(e, snapPt(w)), ...pts.slice(index + 1)])
+        drag.current = { t: 'node', id, index: index + 1, moved: true }
+      } else {
+        drag.current = { t: 'node', id, index, moved: false }
+      }
+      return
+    }
+    if (ev.button === 2) return
     if (s.placing && !readOnly) {
       s.addElement(s.placing, s.snapOn ? { x: snap(w.x), y: snap(w.y) } : w)
       if (!ev.shiftKey) s.set({ placing: null })
@@ -248,6 +288,12 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       let a = (Math.atan2(w.y - d.c.y, w.x - d.c.x) * 180) / Math.PI + 90
       a = ev.shiftKey ? a : Math.round(a / 15) * 15
       s.updateElement(d.id, { rotation: ((a % 360) + 360) % 360 }, false)
+    } else if (d.t === 'node') {
+      if (!d.moved) { s.checkpoint(); d.moved = true }
+      const e = plan.elements.find((x) => x.id === d.id)
+      if (!e) return
+      const p = toLocal(e, snapPt(w))
+      s.editPoints(d.id, (pts) => pts.map((q, i) => (i === d.index ? { x: +p.x.toFixed(3), y: +p.y.toFixed(3) } : q)), false)
     } else if (d.t === 'geo') {
       if (!d.moved) { s.checkpoint(); d.moved = true }
       // The world point that was under plan point -delta now sits at the plan origin
@@ -278,6 +324,11 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
       s.set({ selection: e ? [e.id] : [], highlightTable: e && isTableKind(e.kind) ? e.id : null })
     }
     const d = drag.current
+    if (d?.t === 'node' && d.moved) {
+      // Re-center the shape on its new bounding box once the point is dropped
+      const e = usePlanStore.getState().plan.elements.find((x) => x.id === d.id)
+      if (e) s.updateElement(d.id, renormalize(e), false)
+    }
     if (d?.t === 'marquee' && marquee) {
       const x0 = Math.min(marquee.a.x, marquee.b.x), x1 = Math.max(marquee.a.x, marquee.b.x)
       const y0 = Math.min(marquee.a.y, marquee.b.y), y1 = Math.max(marquee.a.y, marquee.b.y)
@@ -301,6 +352,10 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
     if (readOnly) return
     const w = toWorld(ev.clientX, ev.clientY)
     const kind = ev.dataTransfer.getData('application/x-kind')
+    if (kind && isDrawnKind(kind)) {
+      s.set({ placing: kind })
+      return
+    }
     if (kind) {
       s.addElement(kind, s.snapOn ? { x: snap(w.x), y: snap(w.y) } : w)
       return
@@ -328,6 +383,8 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
         onPointerLeave={() => setCursor(null)}
+        onDoubleClick={() => { if (s.drawing) finishDrawing() }}
+        onContextMenu={(e) => e.preventDefault()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
       >
@@ -387,6 +444,11 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
             )
           })()}
 
+          {selected.length === 1 && selected[0].points && (
+            <ShapeHandles e={selected[0]} zoom={zoom} editable={!!single} />
+          )}
+          {s.drawing && <DrawPreview pts={s.drawing.points} cursor={cursor ? snapPt(cursor) : null} kind={s.drawing.kind} zoom={zoom} />}
+
           {m && (
             <g className="no-export" pointerEvents="none">
               <line x1={m.a.x} y1={m.a.y} x2={m.b.x} y2={m.b.y} stroke="#075e99" strokeWidth={2} vectorEffect="non-scaling-stroke" />
@@ -413,8 +475,12 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
         </div>
       )}
       {s.placing && !review && (
-        <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-xs text-on-ink shadow">
-          Click to place <b>{CATALOG[s.placing]?.name}</b> · Shift+click to place several · Esc to cancel
+        <div className="absolute left-1/2 top-3 max-w-[90%] -translate-x-1/2 rounded-full bg-ink px-4 py-1.5 text-center text-xs text-on-ink shadow">
+          {isDrawnKind(s.placing) ? (
+            <>Drawing <b>{CATALOG[s.placing]?.name}</b> · click to add points · double-click or Enter to finish · right-click removes the last point · Esc cancels</>
+          ) : (
+            <>Click to place <b>{CATALOG[s.placing]?.name}</b> · Shift+click to place several · Esc to cancel</>
+          )}
         </div>
       )}
       {s.tool === 'geo' && !review && (
@@ -439,6 +505,75 @@ export function FloorCanvas({ review = false }: { review?: boolean }) {
         </div>
       )}
     </div>
+  )
+}
+
+/** Measurement tag in screen pixels, drawn at a plan point. */
+function Tag({ at, zoom, children }: { at: Pt; zoom: number; children: React.ReactNode }) {
+  return (
+    <text x={at.x} y={at.y} textAnchor="middle" dominantBaseline="middle" fontSize={12 / zoom} fontFamily="Geist, Arial" fontWeight={600}
+      fill="#ffffff" stroke="#075e99" strokeWidth={5 / zoom} paintOrder="stroke" strokeLinejoin="round">{children}</text>
+  )
+}
+
+/** The line or area being drawn, with live lengths and area. */
+function DrawPreview({ pts, cursor, kind, zoom }: { pts: Pt[]; cursor: Pt | null; kind: string; zoom: number }) {
+  const all = cursor ? [...pts, cursor] : pts
+  const area = CATALOG[kind]?.geometry === 'polygon'
+  const last = pts[pts.length - 1]
+  const r = 4 / zoom
+  return (
+    <g className="no-export" pointerEvents="none">
+      {area && all.length > 2 && <polygon points={all.map((p) => `${p.x},${p.y}`).join(' ')} fill="#1ea7e8" fillOpacity={0.12} />}
+      <polyline points={all.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#1ea7e8" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+      {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={r} fill="#ffffff" stroke="#1ea7e8" strokeWidth={2} vectorEffect="non-scaling-stroke" />)}
+      {cursor && last && (
+        <Tag at={{ x: (last.x + cursor.x) / 2, y: (last.y + cursor.y) / 2 - 12 / zoom }} zoom={zoom}>{fmtLen(dist(last, cursor))}</Tag>
+      )}
+      {cursor && all.length > 2 && (
+        <Tag at={{ x: cursor.x, y: cursor.y + 22 / zoom }} zoom={zoom}>
+          {area ? `${fmtArea(polygonArea(all))} · perimeter ${fmtLen(pathLength(all, true))}` : `Total ${fmtLen(pathLength(all))}`}
+        </Tag>
+      )}
+    </g>
+  )
+}
+
+/** Points of the selected line or area (drag to move, drag a midpoint to add, right-click to remove) and its measurements. */
+function ShapeHandles({ e, zoom, editable }: { e: PlanElement; zoom: number; editable: boolean }) {
+  const pts = e.points!
+  const area = CATALOG[e.kind]?.geometry === 'polygon'
+  const world = pts.map((p) => toPlan(e, p))
+  const r = 5 / zoom
+  const mids = pts.map((p, i) => {
+    const q = pts[i + 1] ?? (area ? pts[0] : undefined)
+    return q && { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }
+  })
+  const top = world.reduce((a, b) => (b.y < a.y ? b : a), world[0])
+  return (
+    <g className="no-export">
+      {editable && (
+        <g transform={`translate(${e.x} ${e.y}) rotate(${e.rotation})`}>
+          {mids.map((m, i) => m && (
+            <circle key={`m${i}`} data-handle="mid" data-index={i} cx={m.x} cy={m.y} r={r * 0.7} fill="#1ea7e8" fillOpacity={0.6}
+              stroke="#ffffff" strokeWidth={1.5} vectorEffect="non-scaling-stroke" style={{ cursor: 'copy' }}>
+              <title>Drag to add a point</title>
+            </circle>
+          ))}
+          {pts.map((p, i) => (
+            <circle key={i} data-handle="node" data-index={i} cx={p.x} cy={p.y} r={r} fill="#ffffff" stroke="#1ea7e8"
+              strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ cursor: 'grab' }}>
+              <title>Drag to move · right-click to remove</title>
+            </circle>
+          ))}
+        </g>
+      )}
+      <g pointerEvents="none">
+        <Tag at={{ x: top.x, y: top.y - 16 / zoom }} zoom={zoom}>
+          {area ? `${fmtArea(polygonArea(pts))} · perimeter ${fmtLen(pathLength(pts, true))}` : `Total ${fmtLen(pathLength(pts))}`}
+        </Tag>
+      </g>
+    </g>
   )
 }
 
