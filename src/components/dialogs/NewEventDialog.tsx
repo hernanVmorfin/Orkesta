@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FilePlus2, FileText, MapPin, Search, X } from 'lucide-react'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { usePlanStore } from '../../store/usePlanStore'
 import { blankPlan } from '../../data/blankPlan'
 import { TEMPLATES } from '../../data/templates'
-import { anchorFor, searchPlaces, type Place } from '../../lib/geo'
+import { anchorFor, GOOGLE_MAPS_KEY, placeById, searchPlaces, suggestPlaces, type Place, type Suggestion } from '../../lib/geo'
 import { isPdf, readImageFile } from '../../lib/drawing'
 import { toast } from '../../lib/toast'
 import type { Basemap, Plan } from '../../types'
@@ -28,6 +28,11 @@ export function NewEventDialog({ onClose, start: initialStart = 'blank' }: { onC
   const [place, setPlace] = useState<Place | null>(null)
   const [results, setResults] = useState<Place[] | null>(null)
   const [searching, setSearching] = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  /** off for the rest of the dialog once Google refuses (e.g. the key doesn't allow this site); search then works on submit */
+  const [suggestOff, setSuggestOff] = useState(!GOOGLE_MAPS_KEY)
+  const typed = useRef(false)
+  const session = useRef(crypto.randomUUID())
   const [start, setStart] = useState(initialStart)
   const [w, setW] = useState(30)
   const [h, setH] = useState(20)
@@ -37,9 +42,34 @@ export function NewEventDialog({ onClose, start: initialStart = 'blank' }: { onC
   const fileRef = useRef<HTMLInputElement>(null)
   const template = TEMPLATES.find((t) => t.id === start)
 
+  useEffect(() => {
+    const q = venue.trim()
+    if (suggestOff || place || !typed.current || q.length < 3) { setSuggestions([]); return }
+    let live = true
+    const t = setTimeout(() => {
+      suggestPlaces(q, session.current).then((r) => { if (live) setSuggestions(r) }).catch((e) => {
+        console.warn('Address suggestions unavailable', e)
+        if (live) { setSuggestOff(true); setSuggestions([]) }
+      })
+    }, 250)
+    return () => { live = false; clearTimeout(t) }
+  }, [venue, place, suggestOff])
+
+  const pickSuggestion = async (sg: Suggestion) => {
+    setSuggestions([]); typed.current = false; setSearching(true)
+    try {
+      setPlace(await placeById(sg.id, session.current))
+      setVenue(sg.main)
+    } catch {
+      toast('Couldn’t look up that address. Try the search button.')
+    }
+    session.current = crypto.randomUUID()
+    setSearching(false)
+  }
+
   const findPlace = async () => {
     if (!venue.trim()) return
-    setSearching(true); setResults(null)
+    setSearching(true); setResults(null); setSuggestions([])
     try { setResults(await searchPlaces(venue)) } catch { setResults([]) }
     setSearching(false)
   }
@@ -106,11 +136,27 @@ export function NewEventDialog({ onClose, start: initialStart = 'blank' }: { onC
           <div>
             <span className="text-[11px] text-muted">Venue</span>
             <div className="flex gap-1">
-              <input className="input" value={venue} placeholder="Riverside Hall, Monterrey" onChange={(e) => { setVenue(e.target.value); setResults(null) }}
+              <input className="input" value={venue} placeholder={suggestOff ? 'Riverside Hall, Monterrey' : 'Venue name or address'} autoComplete="off"
+                onChange={(e) => { typed.current = true; setVenue(e.target.value); setResults(null) }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && venue.trim() && !place) { e.preventDefault(); void findPlace() } }} />
               <button type="button" className="btn shrink-0 border border-bg-2" title="Find on the map" disabled={searching} onClick={() => void findPlace()}><Search size={15} /></button>
             </div>
             {searching && <p className="mt-1 text-[11px] text-muted">Searching…</p>}
+            {suggestions.length > 0 && (
+              <div className="mt-1 rounded-md border border-bg-2">
+                <ul className="max-h-48 overflow-y-auto">
+                  {suggestions.map((sg) => (
+                    <li key={sg.id}>
+                      <button type="button" className="flex w-full items-start gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-bg" onClick={() => void pickSuggestion(sg)}>
+                        <MapPin size={13} className="mt-0.5 shrink-0 text-accent-deep" />
+                        <span className="min-w-0"><span className="block truncate font-medium text-ink">{sg.main}</span><span className="block truncate text-muted">{sg.secondary}</span></span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="border-t border-bg-2 px-2 py-1 text-right text-[10px] text-muted">Powered by Google</p>
+              </div>
+            )}
             {results && (results.length ? (
               <ul className="mt-1 max-h-40 overflow-y-auto rounded-md border border-bg-2">
                 {results.map((r, i) => (

@@ -21,7 +21,13 @@ export const MAX_TILE_ZOOM = Math.min(23, Math.max(17, Number(import.meta.env.VI
  */
 const GEOCODER_URL: string = import.meta.env.VITE_GEOCODER_URL
   ?? 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q={q}'
-export const GEOCODER_NAME: string = import.meta.env.VITE_GEOCODER_NAME ?? 'OpenStreetMap'
+/**
+ * Google Places (New) takes over place search when VITE_GOOGLE_MAPS_API_KEY is set, and adds address
+ * suggestions as you type. Restrict the key to your site's referrers; if Google refuses a request, search
+ * falls back to the geocoder above.
+ */
+export const GOOGLE_MAPS_KEY: string | undefined = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || undefined
+export const GEOCODER_NAME: string = GOOGLE_MAPS_KEY ? 'Google' : import.meta.env.VITE_GEOCODER_NAME ?? 'OpenStreetMap'
 
 const TILE = 256
 const M_PER_DEG = 111320
@@ -112,9 +118,63 @@ export async function searchPlaces(q: string): Promise<Place[]> {
     const lat = +m[1], lng = +m[2]
     return Math.abs(lat) <= 85 && Math.abs(lng) <= 180 ? [{ label: `${lat}, ${lng}`, lat, lng }] : []
   }
+  if (GOOGLE_MAPS_KEY) {
+    try { return await googleSearch(q) } catch (e) { console.warn('Google place search failed, using the fallback geocoder', e) }
+  }
   const res = await fetch(GEOCODER_URL.replace('{q}', encodeURIComponent(q)), { headers: { 'Accept-Language': navigator.language } })
   if (!res.ok) throw new Error(`Place search failed (${res.status})`)
   return parsePlaces(await res.json())
+}
+
+const PLACES_API = 'https://places.googleapis.com/v1'
+
+async function google<T>(path: string, fields: string, body?: object): Promise<T> {
+  const res = await fetch(`${PLACES_API}/${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': GOOGLE_MAPS_KEY ?? '', 'X-Goog-FieldMask': fields },
+    body: body && JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`Google Places ${res.status}: ${(await res.json().catch(() => null))?.error?.message ?? res.statusText}`)
+  return res.json() as Promise<T>
+}
+
+type GooglePlace = { displayName?: { text: string }; formattedAddress?: string; location?: { latitude: number; longitude: number } }
+
+/** A Google place as a Place, its label leading with the venue name when the address doesn't already. */
+export function fromGoogle(g: GooglePlace): Place | null {
+  if (!g.location) return null
+  const name = g.displayName?.text ?? '', address = g.formattedAddress ?? ''
+  const label = !name || address.startsWith(name) ? address || name : address ? `${name}, ${address}` : name
+  return { label, lat: g.location.latitude, lng: g.location.longitude }
+}
+
+async function googleSearch(q: string): Promise<Place[]> {
+  const r = await google<{ places?: GooglePlace[] }>('places:searchText', 'places.displayName,places.formattedAddress,places.location',
+    { textQuery: q, pageSize: 5, languageCode: navigator.language })
+  return (r.places ?? []).flatMap((p) => fromGoogle(p) ?? [])
+}
+
+/** An address suggestion; resolve it to a Place with placeById. */
+export interface Suggestion { id: string; main: string; secondary: string }
+
+/**
+ * Google suggestions while typing. Pass the same session token from the first keystroke until the pick,
+ * so Google bills the typing and the final lookup as one session.
+ */
+export async function suggestPlaces(q: string, sessionToken: string): Promise<Suggestion[]> {
+  type Hit = { placePrediction?: { placeId: string; text?: { text: string }; structuredFormat?: { mainText?: { text: string }; secondaryText?: { text: string } } } }
+  const r = await google<{ suggestions?: Hit[] }>('places:autocomplete', '*', { input: q, sessionToken, languageCode: navigator.language })
+  return (r.suggestions ?? []).flatMap(({ placePrediction: p }) => p ? [{
+    id: p.placeId,
+    main: p.structuredFormat?.mainText?.text ?? p.text?.text ?? '',
+    secondary: p.structuredFormat?.secondaryText?.text ?? '',
+  }] : [])
+}
+
+export async function placeById(id: string, sessionToken: string): Promise<Place> {
+  const p = fromGoogle(await google<GooglePlace>(`places/${encodeURIComponent(id)}?sessionToken=${encodeURIComponent(sessionToken)}`, 'displayName,formattedAddress,location'))
+  if (!p) throw new Error('That place has no location')
+  return p
 }
 
 type NominatimHit = { display_name: string; lat: string; lon: string }

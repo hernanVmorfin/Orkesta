@@ -17,7 +17,7 @@ npm test         # unit tests (also run before every deploy)
   - **Your events:** cards or a list with a thumbnail drawn from each plan, venue, date ("in 22 days"), last edited, role and seats. Search, filters (All, Upcoming, Past, Shared, Archived) and sorting (last edited, event date, name).
   - **Each event's ⋯ menu:** Open, Rename, Duplicate, Share link, Version history, Archive, and Delete, which asks you to type the event's name. "Select" archives or deletes several at once.
   - **Shared with you:** team events not on this device yet.
-- **New event:** name, date, venue (place search centres the satellite view) and size, then start blank, from a template, or from the venue's PDF or image.
+- **New event:** name, date, venue (address suggestions with a Google key; the picked place centres the satellite view) and size, then start blank, from a template, or from the venue's PDF or image.
 - Each event has its own address (`/events/<id>`), so Back returns to the hub. In the editor, the logo ("All events") goes back to the hub, and the menu next to the event name switches between recent events.
 - Venue drawings (Venue tab): upload a PDF or an image as the basemap. For a PDF with several pages, pick the floor plan page. If the sheet states a scale (1:100), enter it to size the drawing exactly; otherwise calibrate it against a known dimension with the measure tool. "Fit footprint to drawing" sets the venue's size to the drawing's.
 - Satellite view (Venue tab): search an address or paste `lat, lng`, then drag and rotate the satellite to line it up with the venue. Imagery stays sharp as you zoom, shows in view-only links, and is included (with attribution) in PNG and PDF exports.
@@ -109,6 +109,9 @@ VITE_GEOCODER_NAME="MapTiler"
 ```
 `{q}` is replaced by the search text. The geocoder can return a Nominatim-style list (Nominatim, LocationIQ) or GeoJSON features (MapTiler, Mapbox, Geoapify). Check each provider's current URLs and zoom levels in its docs. Map keys end up in the browser, which is normal for these services: restrict each key to your site's domain in the provider's dashboard.
 Nominatim allows about 1 search per second and no search-as-you-type; the app only searches on submit.
+
+### Google address search
+Set `VITE_GOOGLE_MAPS_API_KEY` in `.env.local` to search with Google Places. The New event dialog then shows address suggestions as you type, and the Venue tab's search uses Google too. In Google Cloud the key needs **Places API (New)** enabled, and its website restrictions must list every origin the app runs on (for example `http://localhost:5173/*` and `http://localhost:4173/*` for dev and preview, plus the deployed domain). If Google refuses a request, suggestions turn off and search falls back to the geocoder above.
 
 ## Phase 2
 Connect a real server for teams across devices (ROADMAP.md section 11), then live co-editing, links that always show the latest version, vendor roles, email invites and push notifications. Comments, version history and password links already work in the browser; with a server they become shared and synced. See `COLLAB_PROMPTS.md` and `PROMPT.md`.
